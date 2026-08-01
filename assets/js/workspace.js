@@ -84,6 +84,11 @@
     db = JSON.parse(localStorage.getItem(KEY));
     if (!db || !db.sales) db = seed();
   } catch (e) { db = seed(); }
+  // migrations
+  db.sales.forEach(function (s) {
+    if (!s.docType) s.docType = s.no.indexOf("R-") === 0 ? "receipt" : "proforma";
+  });
+  if (!db.nextInv) db.nextInv = 2000;
   save();
 
   /* ================= helpers ================= */
@@ -108,6 +113,7 @@
     var b = balanceOf(sale);
     return b <= 0.005 ? "Paid" : paidOf(sale) > 0 ? "Partial" : "Unpaid";
   }
+  function displayNo(sale) { return sale.invNo || sale.no; }
   function statusBadge(st) {
     var cls = st === "Paid" ? "ok" : st === "Partial" ? "warn" : "bad";
     return '<span class="badge ' + cls + '">' + st + "</span>";
@@ -236,9 +242,11 @@
         if ($("#s-city").value.trim()) client.city = $("#s-city").value.trim();
       }
 
+      var docType = $("#s-doctype") ? $("#s-doctype").value : "proforma";
       var sale = {
         id: db.sales.reduce(function (m, s) { return Math.max(m, s.id); }, 0) + 1,
-        no: "PI-" + (++db.nextNo),
+        no: docType === "invoice" ? "INV-" + (++db.nextInv) : "PI-" + (++db.nextNo),
+        docType: docType,
         date: todayISO(),
         clientId: client.id,
         type: $("#s-type").value,
@@ -259,30 +267,46 @@
       $("#s-tax").value = "6.5"; $("#s-valid").value = "14"; recalc();
 
       renderEverything();
-      $("#inv-select").value = sale.id;
-      renderInvoice();
-      $$(".side nav button[data-view=invoice]")[0].click();
+      if (docType === "invoice") {
+        $("#sinv-select").value = sale.id;
+        renderSInvoice();
+        $$(".side nav button[data-view=sinvoice]")[0].click();
+      } else {
+        $("#inv-select").value = sale.id;
+        renderInvoice();
+        $$(".side nav button[data-view=invoice]")[0].click();
+      }
     });
   }
 
-  /* ================= PROFORMA INVOICE ================= */
-  function renderInvoiceSelect() {
-    var sel = $("#inv-select");
-    if (!sel) return;
-    var cur = sel.value;
-    sel.innerHTML = db.sales.slice().reverse().map(function (s) {
-      var c = clientOf(s);
-      return '<option value="' + s.id + '">' + s.no + " — " + esc(c.name) + " — " + fmt$(totalOf(s)) + " (" + statusOf(s) + ")</option>";
-    }).join("") || "<option value=''>No invoices yet — create one under Sales</option>";
-    if (cur && $$("option", sel).some(function (o) { return o.value === cur; })) sel.value = cur;
+  /* ================= INVOICES (proforma + sales invoice) ================= */
+  function docSales(kind) {
+    return db.sales.filter(function (s) { return (s.docType || "proforma") === kind; });
   }
 
-  function renderInvoice() {
-    var host = $("#invoice-sheet");
+  function renderDocSelect(selId, kind, emptyMsg) {
+    var sel = $(selId);
+    if (!sel) return;
+    var cur = sel.value;
+    sel.innerHTML = docSales(kind).slice().reverse().map(function (s) {
+      var c = clientOf(s);
+      return '<option value="' + s.id + '">' + displayNo(s) + " — " + esc(c.name) + " — " + fmt$(totalOf(s)) + " (" + statusOf(s) + ")</option>";
+    }).join("") || "<option value=''>" + emptyMsg + "</option>";
+    if (cur && $$("option", sel).some(function (o) { return o.value === cur; })) sel.value = cur;
+  }
+  function renderInvoiceSelect() {
+    renderDocSelect("#inv-select", "proforma", "No proforma invoices yet — create one under Sales");
+    renderDocSelect("#sinv-select", "invoice", "No sales invoices yet — create one under Sales or convert a proforma");
+  }
+
+  function renderDocSheet(selId, hostId, kind) {
+    var host = $(hostId);
     if (!host) return;
-    var id = parseInt($("#inv-select").value, 10);
+    var id = parseInt(($(selId) || {}).value, 10);
     var sale = db.sales.filter(function (s) { return s.id === id; })[0];
-    if (!sale) { host.innerHTML = '<div class="panel muted">No invoice selected. Record a sale first under <b>Sales</b>.</div>'; return; }
+    if (!sale) { host.innerHTML = '<div class="panel muted">Nothing selected. Record a sale first under <b>Sales</b>.</div>'; return; }
+    var isFinal = kind === "invoice";
+    var title = isFinal ? "SALES INVOICE" : "PROFORMA INVOICE";
     var c = clientOf(sale);
     var st = statusOf(sale);
     var valid = new Date(sale.date);
@@ -295,11 +319,11 @@
       '<img src="assets/img/brand/ethan-foods-logo.png" alt="Ethan Foods">' +
       '<div class="inv-co"><b>' + COMPANY.name + "</b><br>" + COMPANY.phone + "<br>" + COMPANY.email + "<br>" + COMPANY.web + "</div>" +
       "</div>" +
-      '<div class="inv-title">PROFORMA INVOICE</div>' +
+      '<div class="inv-title">' + title + "</div>" +
       '<div class="inv-meta">' +
-      "<span>Invoice No.<b>" + sale.no + "</b></span>" +
+      "<span>Invoice No.<b>" + displayNo(sale) + "</b></span>" +
       "<span>Date<b>" + sale.date + "</b></span>" +
-      "<span>Valid until<b>" + valid.toISOString().slice(0, 10) + "</b></span>" +
+      "<span>" + (isFinal ? "Payment due" : "Valid until") + "<b>" + valid.toISOString().slice(0, 10) + "</b></span>" +
       "<span>Client type<b>" + esc(sale.type || "Retail") + "</b></span>" +
       "</div>" +
       '<div class="inv-billto"><h4>Bill to</h4><b>' + esc(c.name) + "</b>" +
@@ -324,26 +348,57 @@
       "</div>" +
       (sale.notes ? '<div class="inv-notes"><b>Notes:</b> ' + esc(sale.notes) + "</div>" : "") +
       '<div class="inv-terms">' +
-      "<div>This proforma invoice is not a demand for payment.<br>Prices valid until the date shown above.<br>Free shipping across the USA on standard orders.</div>" +
+      "<div>" + (isFinal
+        ? "Payment is due by the date shown above.<br>Please quote invoice number " + displayNo(sale) + " with your payment.<br>Free shipping across the USA on standard orders."
+        : "This proforma invoice is not a demand for payment.<br>Prices valid until the date shown above.<br>Free shipping across the USA on standard orders.") + "</div>" +
       '<div class="inv-sign">Authorized signature</div>' +
       "</div>" +
       '<div class="inv-foot">Thank you for your business! · ' + COMPANY.name + " · " + COMPANY.phone + " · " + COMPANY.email + "</div>" +
       "</div>";
+  }
+  function renderInvoice() { renderDocSheet("#inv-select", "#invoice-sheet", "proforma"); }
+  function renderSInvoice() { renderDocSheet("#sinv-select", "#sinvoice-sheet", "invoice"); }
+
+  function goToPayment(saleId) {
+    $$(".side nav button[data-view=payment]")[0].click();
+    if ($("#pay-invoice")) { $("#pay-invoice").value = saleId; paintPayBalance(); }
   }
 
   var invSel = $("#inv-select");
   if (invSel) {
     $("#inv-new").addEventListener("click", function () {
       $$(".side nav button[data-view=sales]")[0].click();
+      if ($("#s-doctype")) $("#s-doctype").value = "proforma";
       var n = $("#s-name"); if (n) n.focus();
     });
     invSel.addEventListener("change", renderInvoice);
     $("#inv-print").addEventListener("click", function () { window.print(); });
-    $("#inv-pay").addEventListener("click", function () {
-      var id = $("#inv-select").value;
-      $$(".side nav button[data-view=payment]")[0].click();
-      if ($("#pay-invoice")) { $("#pay-invoice").value = id; paintPayBalance(); }
+    $("#inv-pay").addEventListener("click", function () { goToPayment($("#inv-select").value); });
+    $("#inv-convert").addEventListener("click", function () {
+      var id = parseInt($("#inv-select").value, 10);
+      var s = db.sales.filter(function (x) { return x.id === id; })[0];
+      if (!s) { alert("Choose a proforma invoice first."); return; }
+      if (!confirm("Convert " + s.no + " into a final sales invoice?")) return;
+      s.docType = "invoice";
+      s.invNo = "INV-" + (++db.nextInv);
+      save();
+      renderEverything();
+      $("#sinv-select").value = s.id;
+      renderSInvoice();
+      $$(".side nav button[data-view=sinvoice]")[0].click();
     });
+  }
+
+  var sinvSel = $("#sinv-select");
+  if (sinvSel) {
+    $("#sinv-new").addEventListener("click", function () {
+      $$(".side nav button[data-view=sales]")[0].click();
+      if ($("#s-doctype")) $("#s-doctype").value = "invoice";
+      var n = $("#s-name"); if (n) n.focus();
+    });
+    sinvSel.addEventListener("change", renderSInvoice);
+    $("#sinv-print").addEventListener("click", function () { window.print(); });
+    $("#sinv-pay").addEventListener("click", function () { goToPayment($("#sinv-select").value); });
   }
 
   /* ================= CLIENT DATABASE ================= */
@@ -419,7 +474,7 @@
     var open = db.sales.filter(function (s) { return statusOf(s) !== "Paid"; });
     var done = db.sales.filter(function (s) { return statusOf(s) === "Paid"; });
     sel.innerHTML = open.concat(done).map(function (s) {
-      return '<option value="' + s.id + '">' + s.no + " — " + esc(clientOf(s).name) +
+      return '<option value="' + s.id + '">' + displayNo(s) + " — " + esc(clientOf(s).name) +
         " — balance " + fmt$(balanceOf(s)) + "</option>";
     }).join("") || "<option value=''>No invoices yet</option>";
     if (cur && $$("option", sel).some(function (o) { return o.value === cur; })) sel.value = cur;
@@ -440,7 +495,7 @@
     var rows = [];
     db.sales.forEach(function (s) {
       (s.payments || []).forEach(function (p) {
-        rows.push({ date: p.date, no: s.no, client: clientOf(s).name, method: p.method, ref: p.ref, amount: p.amount });
+        rows.push({ date: p.date, no: displayNo(s), client: clientOf(s).name, method: p.method, ref: p.ref, amount: p.amount });
       });
     });
     rows.sort(function (a, b) { return a.date < b.date ? 1 : -1; });
@@ -578,6 +633,7 @@
     var sale = {
       id: db.sales.reduce(function (m, s) { return Math.max(m, s.id); }, 0) + 1,
       no: "R-" + (++db.nextReceipt),
+      docType: "receipt",
       date: todayISO(),
       clientId: parseInt($("#reg-cust").value, 10) || null,
       type: "In-store",
@@ -831,6 +887,7 @@
     var sale = {
       id: db.sales.reduce(function (m, s) { return Math.max(m, s.id); }, 0) + 1,
       no: "PI-" + (++db.nextNo),
+      docType: "proforma",
       date: todayISO(), clientId: client.id, type: "Retail",
       items: (o.items || []).map(function (i) { return { name: i.name, qty: i.qty, price: i.price }; }),
       delivery: 0, discount: 0, taxRate: 0, validDays: 14,
@@ -923,6 +980,7 @@
     renderClientPicker();
     renderInvoiceSelect();
     renderInvoice();
+    renderSInvoice();
     renderClients();
     renderAccount();
     renderPaySelect();
