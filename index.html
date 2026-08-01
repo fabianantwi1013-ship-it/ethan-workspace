@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/css/dashboard.css?v=12">
+<link rel="stylesheet" href="assets/css/dashboard.css?v=13">
 </head>
 <body class="locked">
 <style>
@@ -162,6 +162,7 @@
 
     <!-- ================= CLIENT DATABASE ================= -->
     <section class="view" id="view-clients">
+      <div class="panel" id="client-champ" hidden style="display:flex;gap:1.2rem;align-items:center;margin-bottom:1.2rem"></div>
       <div class="panel">
         <div class="toolbar">
           <input type="search" id="client-search" placeholder="Search name, business or phone…">
@@ -178,7 +179,7 @@
         </form>
         <div class="tbl-scroll">
           <table class="tbl">
-            <thead><tr><th>Client</th><th>Business</th><th>Phone</th><th>Email</th><th>City</th><th class="num">Invoices</th><th class="num">Invoiced</th><th class="num">Balance</th></tr></thead>
+            <thead><tr><th>Client</th><th>Business</th><th>Phone</th><th>City</th><th class="num">Invoices</th><th class="num">Packs</th><th>Most bought</th><th class="num">Invoiced</th><th class="num">Balance</th></tr></thead>
             <tbody id="clients-body"></tbody>
           </table>
         </div>
@@ -336,7 +337,7 @@
   </main>
 </div>
 
-<script src="assets/js/config.js?v=12"></script>
+<script src="assets/js/config.js?v=13"></script>
 <script>
 /* Workspace lock — compares a SHA-256 hash of the entered password with
    EF_CONFIG.dashboardPasswordHash. The password itself is never stored. */
@@ -380,6 +381,6 @@
   });
 })();
 </script>
-<script src="assets/js/workspace.js?v=12"></script>
+<script src="assets/js/workspace.js?v=13"></script>
 </body>
 </html>

@@ -404,23 +404,74 @@
   }
 
   /* ================= CLIENT DATABASE ================= */
+  function clientStats(c) {
+    var sales = db.sales.filter(function (s) { return s.clientId === c.id; });
+    var byProduct = {};
+    var packs = 0;
+    sales.forEach(function (s) {
+      s.items.forEach(function (i) {
+        packs += i.qty;
+        var k = shortName(i.name);
+        byProduct[k] = (byProduct[k] || 0) + i.qty;
+      });
+    });
+    var top = Object.keys(byProduct).sort(function (a, b) { return byProduct[b] - byProduct[a]; })[0];
+    return {
+      sales: sales,
+      invoiced: sales.reduce(function (a, s) { return a + totalOf(s); }, 0),
+      balance: sales.reduce(function (a, s) { return a + balanceOf(s); }, 0),
+      packs: packs,
+      topProduct: top || null,
+      topQty: top ? byProduct[top] : 0
+    };
+  }
+
+  function renderClientChamp() {
+    var host = $("#client-champ");
+    if (!host) return;
+    var best = null, bestStats = null;
+    db.clients.forEach(function (c) {
+      var st = clientStats(c);
+      if (!st.packs) return;
+      if (!bestStats || st.packs > bestStats.packs ||
+          (st.packs === bestStats.packs && st.invoiced > bestStats.invoiced)) {
+        best = c; bestStats = st;
+      }
+    });
+    if (!best) { host.hidden = true; return; }
+    host.hidden = false;
+    host.innerHTML =
+      '<img src="' + matchImg(bestStats.topProduct || "") + '" alt="" style="height:74px">' +
+      '<div style="flex:1"><div style="font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:800">🏆 Top customer — buys the most</div>' +
+      '<div style="font-family:var(--font-display);font-size:1.25rem;margin:.15rem 0">' + esc(best.name) +
+      (best.business ? ' <span style="font-size:.85rem;color:var(--muted)">· ' + esc(best.business) + "</span>" : "") + "</div>" +
+      '<div style="font-size:.86rem;color:var(--muted)"><b style="color:var(--ink)">' + bestStats.packs + ' packs</b> across ' +
+      bestStats.sales.length + " purchases · " + fmt$(bestStats.invoiced) + " total</div></div>" +
+      '<div style="text-align:right"><div style="font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:800">Most bought</div>' +
+      '<div style="font-weight:800;margin-top:.15rem">' + esc(bestStats.topProduct || "—") + "</div>" +
+      '<div style="font-size:.82rem;color:var(--muted)">' + bestStats.topQty + " packs</div></div>";
+  }
+
   function renderClients() {
     var body = $("#clients-body");
     if (!body) return;
+    renderClientChamp();
     var q = ($("#client-search").value || "").toLowerCase();
     var rows = db.clients.filter(function (c) {
       return !q || (c.name + " " + (c.business || "") + " " + (c.phone || "")).toLowerCase().indexOf(q) >= 0;
     }).map(function (c) {
-      var sales = db.sales.filter(function (s) { return s.clientId === c.id; });
-      var invoiced = sales.reduce(function (a, s) { return a + totalOf(s); }, 0);
-      var balance = sales.reduce(function (a, s) { return a + balanceOf(s); }, 0);
-      return "<tr><td><b>" + esc(c.name) + "</b></td><td>" + esc(c.business || "—") + "</td>" +
-        "<td>" + esc(c.phone || "—") + "</td><td>" + esc(c.email || "—") + "</td><td>" + esc(c.city || "—") + "</td>" +
-        '<td class="num">' + sales.length + '</td><td class="num">' + fmt$(invoiced) + "</td>" +
-        '<td class="num">' + (balance > 0 ? "<b style='color:var(--red)'>" + fmt$(balance) + "</b>" : fmt$(0)) + "</td></tr>";
+      var st = clientStats(c);
+      return "<tr><td><b>" + esc(c.name) + "</b>" + (c.email ? "<br><small class='muted'>" + esc(c.email) + "</small>" : "") + "</td>" +
+        "<td>" + esc(c.business || "—") + "</td>" +
+        "<td>" + esc(c.phone || "—") + "</td><td>" + esc(c.city || "—") + "</td>" +
+        '<td class="num">' + st.sales.length + "</td>" +
+        '<td class="num"><b>' + st.packs + "</b></td>" +
+        "<td>" + (st.topProduct ? esc(st.topProduct) + " <small class='muted'>· " + st.topQty + "</small>" : "—") + "</td>" +
+        '<td class="num">' + fmt$(st.invoiced) + "</td>" +
+        '<td class="num">' + (st.balance > 0 ? "<b style='color:var(--red)'>" + fmt$(st.balance) + "</b>" : fmt$(0)) + "</td></tr>";
     });
     body.innerHTML = rows.join("") ||
-      "<tr><td colspan='8' style='text-align:center;color:var(--muted);padding:1.6rem'>No clients yet — they're added automatically when you record a sale.</td></tr>";
+      "<tr><td colspan='9' style='text-align:center;color:var(--muted);padding:1.6rem'>No clients yet — they're added automatically when you record a sale.</td></tr>";
   }
 
   var clientSearch = $("#client-search");
