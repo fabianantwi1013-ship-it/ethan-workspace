@@ -1181,18 +1181,44 @@
         lossCard("Spoilage value", fmt$(spl.reduce(function (a, x) { return a + x.qty * x.unitValue; }, 0)));
     }
 
-    // products sold
-    var byProd = {};
-    sales.forEach(function (s) {
+    // products sold, broken down by month (last 6 months)
+    var monthCols = [];
+    for (var mc = 5; mc >= 0; mc--) {
+      var md = new Date(now.getFullYear(), now.getMonth() - mc, 1);
+      monthCols.push({
+        key: md.toISOString().slice(0, 7),
+        label: md.toLocaleDateString("en-US", { month: "short", year: "2-digit" })
+      });
+    }
+    var matrix = {};   // product -> {perMonth:{key:qty}, qty, rev}
+    db.sales.forEach(function (s) {
+      var mKey = s.date.slice(0, 7);
+      if (!monthCols.some(function (x) { return x.key === mKey; })) return;
       s.items.forEach(function (i) {
-        byProd[i.name] = byProd[i.name] || { qty: 0, rev: 0 };
-        byProd[i.name].qty += i.qty; byProd[i.name].rev += i.qty * i.price;
+        var k = shortName(i.name);
+        var row = matrix[k] = matrix[k] || { perMonth: {}, qty: 0, rev: 0 };
+        row.perMonth[mKey] = (row.perMonth[mKey] || 0) + i.qty;
+        row.qty += i.qty;
+        row.rev += i.qty * i.price;
       });
     });
-    $("#report-products").innerHTML = Object.keys(byProd).sort(function (a, b) { return byProd[b].rev - byProd[a].rev; })
+    if ($("#report-products-head")) {
+      $("#report-products-head").innerHTML = "<tr><th>Product</th>" +
+        monthCols.map(function (m) { return '<th class="num">' + m.label + "</th>"; }).join("") +
+        '<th class="num">Total packs</th><th class="num">Revenue</th></tr>';
+    }
+    $("#report-products").innerHTML = Object.keys(matrix).sort(function (a, b) { return matrix[b].rev - matrix[a].rev; })
       .map(function (k) {
-        return "<tr><td>" + esc(k) + '</td><td class="num">' + byProd[k].qty + '</td><td class="num"><b>' + fmt$(byProd[k].rev) + "</b></td></tr>";
-      }).join("") || "<tr><td colspan='3' style='text-align:center;color:var(--muted);padding:1.6rem'>No sales in this period.</td></tr>";
+        var row = matrix[k];
+        var best = Math.max.apply(null, monthCols.map(function (m) { return row.perMonth[m.key] || 0; }));
+        return "<tr><td><b>" + esc(k) + "</b></td>" +
+          monthCols.map(function (m) {
+            var q = row.perMonth[m.key] || 0;
+            return '<td class="num">' + (q ? (q === best && best > 0 ? "<b style='color:var(--ginger)'>" + q + "</b>" : q) : "<span class='muted'>—</span>") + "</td>";
+          }).join("") +
+          '<td class="num"><b>' + row.qty + '</b></td><td class="num"><b>' + fmt$(row.rev) + "</b></td></tr>";
+      }).join("") ||
+      "<tr><td colspan='" + (monthCols.length + 3) + "' style='text-align:center;color:var(--muted);padding:1.6rem'>No sales recorded in the last 6 months.</td></tr>";
   }
 
   var repRange = $("#report-range");

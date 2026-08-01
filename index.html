@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/css/dashboard.css?v=13">
+<link rel="stylesheet" href="assets/css/dashboard.css?v=14">
 </head>
 <body class="locked">
 <style>
@@ -324,10 +324,10 @@
       </div>
 
       <div class="panel mt">
-        <h3>Products Sold <span class="hint">from recorded sales</span></h3>
+        <h3>Products Sold by Month <span class="hint">packs per month, last 6 months</span></h3>
         <div class="tbl-scroll">
           <table class="tbl">
-            <thead><tr><th>Product</th><th class="num">Qty</th><th class="num">Revenue</th></tr></thead>
+            <thead id="report-products-head"></thead>
             <tbody id="report-products"></tbody>
           </table>
         </div>
@@ -337,7 +337,7 @@
   </main>
 </div>
 
-<script src="assets/js/config.js?v=13"></script>
+<script src="assets/js/config.js?v=14"></script>
 <script>
 /* Workspace lock — compares a SHA-256 hash of the entered password with
    EF_CONFIG.dashboardPasswordHash. The password itself is never stored. */
@@ -381,6 +381,6 @@
   });
 })();
 </script>
-<script src="assets/js/workspace.js?v=13"></script>
+<script src="assets/js/workspace.js?v=14"></script>
 </body>
 </html>
