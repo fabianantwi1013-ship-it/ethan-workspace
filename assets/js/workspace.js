@@ -89,6 +89,7 @@
     if (!s.docType) s.docType = s.no.indexOf("R-") === 0 ? "receipt" : "proforma";
   });
   if (!db.nextInv) db.nextInv = 2000;
+  if (!db.issues) db.issues = [];   // returns & spoilage ledger
   save();
 
   /* ================= helpers ================= */
@@ -904,6 +905,130 @@
     $$(".side nav button[data-view=invoice]")[0].click();
   });
 
+  /* ================= RETURNS & SPOILAGE ================= */
+  var ISSUE_REASONS = {
+    "return": ["Damaged in transit", "Quality complaint", "Wrong item delivered",
+               "Customer changed mind", "Expired on arrival", "Other"],
+    spoilage: ["Expired", "Broken / leaking bottle", "Storage failure",
+               "Production fault", "Other"]
+  };
+  var issueKind = "return";
+
+  function issueSetup() {
+    if (!$("#issue-form")) return;
+    $("#is-date").value = todayISO();
+
+    $("#is-product").innerHTML = CATALOG.filter(function (p) { return p.price > 0; })
+      .map(function (p) { return "<option>" + esc(p.name) + "</option>"; }).join("") +
+      '<option value="__custom">Custom / other product…</option>';
+    $("#is-product").addEventListener("change", function () {
+      $("#is-custom-wrap").hidden = this.value !== "__custom";
+    });
+
+    function paintKind() {
+      $("#is-reason").innerHTML = ISSUE_REASONS[issueKind]
+        .map(function (r) { return "<option>" + r + "</option>"; }).join("");
+      var isReturn = issueKind === "return";
+      $("#is-invoice-wrap").hidden = !isReturn;
+      $("#is-refund-wrap").hidden = !isReturn;
+    }
+    $$("#is-kind button").forEach(function (b) {
+      b.addEventListener("click", function () {
+        issueKind = b.getAttribute("data-kind");
+        $$("#is-kind button").forEach(function (x) { x.classList.toggle("active", x === b); });
+        paintKind();
+      });
+    });
+    paintKind();
+
+    $("#is-refund").addEventListener("change", function () {
+      $("#is-refund-fields").hidden = !this.checked;
+      if (this.checked && !$("#is-refund-amt").value) {
+        var qty = parseInt($("#is-qty").value, 10) || 1;
+        var val = parseFloat($("#is-value").value) || 0;
+        $("#is-refund-amt").value = (qty * val).toFixed(2);
+      }
+    });
+
+    $("#issue-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var product = $("#is-product").value === "__custom" ? $("#is-custom").value.trim() : $("#is-product").value;
+      if (!product) { alert("Enter the product name."); return; }
+      var qty = Math.max(1, parseInt($("#is-qty").value, 10) || 1);
+      var val = Math.max(0, parseFloat($("#is-value").value) || 0);
+      var refund = issueKind === "return" && $("#is-refund").checked;
+      db.issues.unshift({
+        id: db.issues.reduce(function (m, x) { return Math.max(m, x.id || 0); }, 0) + 1,
+        date: $("#is-date").value || todayISO(),
+        kind: issueKind,
+        product: product, qty: qty, unitValue: val,
+        saleId: issueKind === "return" ? (parseInt($("#is-invoice").value, 10) || null) : null,
+        reason: $("#is-reason").value,
+        refundAmount: refund ? Math.max(0, parseFloat($("#is-refund-amt").value) || 0) : 0,
+        refundMethod: refund ? $("#is-refund-method").value : null,
+        notes: $("#is-notes").value.trim()
+      });
+      save();
+      this.reset();
+      $("#is-date").value = todayISO(); $("#is-qty").value = "1"; $("#is-value").value = "42.00";
+      $("#is-refund-fields").hidden = true; $("#is-custom-wrap").hidden = true;
+      renderEverything();
+    });
+  }
+  issueSetup();
+
+  function renderIssueInvoiceSelect() {
+    var sel = $("#is-invoice");
+    if (!sel) return;
+    var cur = sel.value;
+    sel.innerHTML = "<option value=''>— Not linked —</option>" +
+      db.sales.slice(-50).reverse().map(function (s) {
+        return '<option value="' + s.id + '">' + displayNo(s) + " — " + esc(clientOf(s).name) + "</option>";
+      }).join("");
+    if (cur && $$("option", sel).some(function (o) { return o.value === cur; })) sel.value = cur;
+  }
+
+  function issuesInDays(days) {
+    var cutoff = Date.now() - days * 86400000;
+    return db.issues.filter(function (x) { return new Date(x.date).getTime() >= cutoff; });
+  }
+
+  function renderIssues() {
+    var body = $("#issues-body");
+    if (!body) return;
+    var recent = issuesInDays(30);
+    var rets = recent.filter(function (x) { return x.kind === "return"; });
+    var spoil = recent.filter(function (x) { return x.kind === "spoilage"; });
+    $("#is-kpi-returns").textContent = rets.reduce(function (a, x) { return a + x.qty; }, 0) + " packs";
+    $("#is-kpi-refunds").textContent = fmt$(rets.reduce(function (a, x) { return a + (x.refundAmount || 0); }, 0));
+    $("#is-kpi-spoilqty").textContent = spoil.reduce(function (a, x) { return a + x.qty; }, 0) + " packs";
+    $("#is-kpi-spoilval").textContent = fmt$(spoil.reduce(function (a, x) { return a + x.qty * x.unitValue; }, 0));
+
+    body.innerHTML = db.issues.slice(0, 100).map(function (x) {
+      var sale = x.saleId ? db.sales.filter(function (s) { return s.id === x.saleId; })[0] : null;
+      return "<tr><td>" + x.date + "</td>" +
+        "<td>" + (x.kind === "return" ? '<span class="badge warn">Return</span>' : '<span class="badge bad">Spoilt</span>') + "</td>" +
+        "<td>" + esc(shortName(x.product)) + (sale ? "<br><small class='muted'>" + displayNo(sale) + "</small>" : "") +
+        (x.notes ? "<br><small class='muted'>" + esc(x.notes) + "</small>" : "") + "</td>" +
+        '<td class="num">' + x.qty + "</td>" +
+        '<td class="num">' + fmt$(x.qty * x.unitValue) + "</td>" +
+        "<td>" + esc(x.reason || "—") + "</td>" +
+        "<td>" + (x.refundAmount ? "<b>" + fmt$(x.refundAmount) + "</b><br><small class='muted'>" + esc(x.refundMethod || "") + "</small>" : "—") + "</td>" +
+        '<td><button class="rm" data-issue-del="' + x.id + '" title="Delete">×</button></td></tr>';
+    }).join("") ||
+      "<tr><td colspan='8' style='text-align:center;color:var(--muted);padding:1.6rem'>Nothing recorded yet — hopefully it stays that way! 🌿</td></tr>";
+  }
+
+  document.addEventListener("click", function (e) {
+    var del = e.target.closest("[data-issue-del]");
+    if (!del) return;
+    if (!confirm("Delete this record?")) return;
+    var id = parseInt(del.getAttribute("data-issue-del"), 10);
+    db.issues = db.issues.filter(function (x) { return x.id !== id; });
+    save();
+    renderEverything();
+  });
+
   /* ================= REPORT ================= */
   function reportSales() {
     var range = $("#report-range").value;
@@ -952,6 +1077,23 @@
         '</span><div class="track"><i style="width:' + (x.v / maxC * 100) + '%"></i></div><span class="num">' + fmt$(x.v) + "</span></div>";
     }).join("") || '<p class="muted">No sales in this period.</p>';
 
+    // returns & spoilage losses for the same period
+    if ($("#rep-loss")) {
+      var rng = $("#report-range").value;
+      var iss = rng === "all" ? db.issues : issuesInDays(parseInt(rng, 10));
+      var rts = iss.filter(function (x) { return x.kind === "return"; });
+      var spl = iss.filter(function (x) { return x.kind === "spoilage"; });
+      function lossCard(label, value) {
+        return "<div><span class='muted'>" + label + "</span><b>" + value + "</b></div>";
+      }
+      $("#rep-loss").innerHTML =
+        lossCard("Packs returned", rts.reduce(function (a, x) { return a + x.qty; }, 0)) +
+        lossCard("Value of returns", fmt$(rts.reduce(function (a, x) { return a + x.qty * x.unitValue; }, 0))) +
+        lossCard("Refunds paid out", fmt$(rts.reduce(function (a, x) { return a + (x.refundAmount || 0); }, 0))) +
+        lossCard("Packs spoilt", spl.reduce(function (a, x) { return a + x.qty; }, 0)) +
+        lossCard("Spoilage value", fmt$(spl.reduce(function (a, x) { return a + x.qty * x.unitValue; }, 0)));
+    }
+
     // products sold
     var byProd = {};
     sales.forEach(function (s) {
@@ -979,6 +1121,8 @@
     renderEod();
     renderClientPicker();
     renderInvoiceSelect();
+    renderIssueInvoiceSelect();
+    renderIssues();
     renderInvoice();
     renderSInvoice();
     renderClients();

@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/css/dashboard.css?v=10">
+<link rel="stylesheet" href="assets/css/dashboard.css?v=11">
 </head>
 <body class="locked">
 <style>
@@ -66,6 +66,7 @@
       <button data-view="clients"><span class="ic">👥</span> Client Database</button>
       <button data-view="account"><span class="ic">💼</span> Account</button>
       <button data-view="payment"><span class="ic">💵</span> Payment</button>
+      <button data-view="issues"><span class="ic">♻️</span> Returns &amp; Spoilage</button>
       <button data-view="report"><span class="ic">📈</span> Report</button>
     </nav>
     <a class="back" href="https://fabianantwi1013-ship-it.github.io/ethan-foods/" target="_blank">↗ Open website</a>
@@ -233,6 +234,59 @@
       </div>
     </section>
 
+    <!-- ================= RETURNS & SPOILAGE ================= -->
+    <section class="view" id="view-issues">
+      <div class="grid kpis">
+        <div class="panel kpi"><div class="label">Returns (30 days)</div><div class="value" id="is-kpi-returns">—</div></div>
+        <div class="panel kpi"><div class="label">Refunds Paid (30 days)</div><div class="value" id="is-kpi-refunds">—</div></div>
+        <div class="panel kpi"><div class="label">Packs Spoilt (30 days)</div><div class="value" id="is-kpi-spoilqty">—</div></div>
+        <div class="panel kpi"><div class="label">Spoilage Value (30 days)</div><div class="value" id="is-kpi-spoilval">—</div></div>
+      </div>
+
+      <div class="grid two-col mt" style="align-items:start">
+        <div class="panel">
+          <h3>Record an Issue</h3>
+          <div class="pay-methods" style="grid-template-columns:1fr 1fr;margin-top:.2rem" id="is-kind">
+            <button type="button" data-kind="return" class="active">↩️ Returned by customer</button>
+            <button type="button" data-kind="spoilage">🥀 Spoilt / damaged stock</button>
+          </div>
+          <form id="issue-form" class="wform" style="margin-top:1rem">
+            <div><label>Product *</label>
+              <select id="is-product"></select>
+            </div>
+            <div id="is-custom-wrap" hidden><label>Custom product name *</label><input id="is-custom"></div>
+            <div><label>Quantity (packs) *</label><input id="is-qty" type="number" min="1" value="1" required></div>
+            <div><label>Value per pack ($)</label><input id="is-value" type="number" min="0" step="0.01" value="42.00"></div>
+            <div><label>Date</label><input id="is-date" type="date"></div>
+            <div><label>Reason</label><select id="is-reason"></select></div>
+            <div id="is-invoice-wrap"><label>Related invoice (optional)</label><select id="is-invoice"></select></div>
+            <div class="full" id="is-refund-wrap">
+              <label style="display:flex;align-items:center;gap:.5rem;text-transform:none;font-size:.85rem">
+                <input type="checkbox" id="is-refund" style="width:auto"> Refund was given to the customer
+              </label>
+              <div class="wform" id="is-refund-fields" hidden style="margin-top:.6rem">
+                <div><label>Refund amount ($)</label><input id="is-refund-amt" type="number" min="0" step="0.01"></div>
+                <div><label>Refund method</label>
+                  <select id="is-refund-method"><option>Cash</option><option>Card</option><option>Mobile Money</option><option>Bank Transfer</option><option>Store credit</option></select>
+                </div>
+              </div>
+            </div>
+            <div class="full"><label>Notes</label><input id="is-notes" placeholder="Anything worth remembering…"></div>
+            <div class="full"><button class="btn btn-ginger" type="submit">Save record</button></div>
+          </form>
+        </div>
+        <div class="panel">
+          <h3>History <span class="hint">newest first</span></h3>
+          <div class="tbl-scroll">
+            <table class="tbl">
+              <thead><tr><th>Date</th><th>Type</th><th>Product</th><th class="num">Qty</th><th class="num">Value</th><th>Reason</th><th>Refund</th><th></th></tr></thead>
+              <tbody id="issues-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ================= REPORT ================= -->
     <section class="view" id="view-report">
       <div class="toolbar no-print">
@@ -260,6 +314,11 @@
         </div>
       </div>
       <div class="panel mt">
+        <h3>Returns &amp; Spoilage <span class="hint">losses in this period</span></h3>
+        <div class="stat-grid" id="rep-loss"></div>
+      </div>
+
+      <div class="panel mt">
         <h3>Products Sold <span class="hint">from recorded sales</span></h3>
         <div class="tbl-scroll">
           <table class="tbl">
@@ -273,7 +332,7 @@
   </main>
 </div>
 
-<script src="assets/js/config.js?v=10"></script>
+<script src="assets/js/config.js?v=11"></script>
 <script>
 /* Workspace lock — compares a SHA-256 hash of the entered password with
    EF_CONFIG.dashboardPasswordHash. The password itself is never stored. */
@@ -317,6 +376,6 @@
   });
 })();
 </script>
-<script src="assets/js/workspace.js?v=10"></script>
+<script src="assets/js/workspace.js?v=11"></script>
 </body>
 </html>
