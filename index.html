@@ -1,0 +1,424 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>POS Dashboard — Ethan Foods</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="assets/img/brand/favicon-32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/dashboard.css?v=4">
+</head>
+<body class="locked">
+<style>
+  body.locked .shell { display: none; }
+  .lock-veil {
+    position: fixed; inset: 0; z-index: 100; display: none;
+    align-items: center; justify-content: center;
+    background: linear-gradient(160deg, #2A1E10, #4A3318 60%, #2A1E10);
+  }
+  body.locked .lock-veil { display: flex; }
+  .lock-card {
+    background: #fff; border-radius: 18px; padding: 2.6rem 2.4rem; width: min(400px, 92vw);
+    text-align: center; box-shadow: 0 30px 80px rgba(0,0,0,.4);
+  }
+  .lock-card img { height: 64px; margin-bottom: 1rem; }
+  .lock-card h1 { font-family: var(--font-display); font-size: 1.35rem; margin: 0 0 .4rem; }
+  .lock-card p { color: var(--muted); font-size: .85rem; margin: 0 0 1.3rem; }
+  .lock-card input {
+    width: 100%; padding: .8rem 1rem; border: 1.5px solid var(--line); border-radius: 10px;
+    font: inherit; font-size: 1rem; text-align: center; letter-spacing: .12em; box-sizing: border-box;
+  }
+  .lock-card input:focus { outline: 2px solid var(--gold); border-color: transparent; }
+  .lock-card button {
+    width: 100%; margin-top: .8rem; padding: .8rem; border: 0; border-radius: 10px;
+    background: var(--ginger); color: #fff; font: inherit; font-weight: 800; cursor: pointer;
+  }
+  .lock-err { color: var(--red); font-size: .8rem; height: 1.1rem; margin-top: .55rem; }
+  .lock-card.shake { animation: lockshake .3s; }
+  @keyframes lockshake { 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+</style>
+<div class="lock-veil">
+  <form class="lock-card" id="lock-form">
+    <img src="assets/img/brand/ethan-foods-mark.png" alt="">
+    <h1>Workspace</h1>
+    <p>This area is for Ethan Foods staff.<br>Enter the password to continue.</p>
+    <input type="password" id="lock-pass" placeholder="Password" autocomplete="current-password" autofocus>
+    <button type="submit">Unlock</button>
+    <div class="lock-err" id="lock-err"></div>
+  </form>
+</div>
+<div class="shell">
+
+  <!-- SIDEBAR -->
+  <aside class="side">
+    <div class="logo">
+      <img src="assets/img/brand/ethan-foods-mark.png" alt="">
+      <b>Ethan Foods<span>POS Dashboard</span></b>
+    </div>
+    <nav>
+      <span class="nav-group">Store</span>
+      <button class="active" data-view="overview"><span class="ic">📊</span> Overview</button>
+      <button data-view="orders"><span class="ic">🧾</span> Orders</button>
+      <button data-view="weborders"><span class="ic">🛍️</span> Website Orders <span class="count-badge" id="web-count" hidden>0</span></button>
+      <button data-view="inventory"><span class="ic">📦</span> Inventory</button>
+      <span class="nav-group">Sales Office</span>
+      <button data-view="sales"><span class="ic">📝</span> Sales</button>
+      <button data-view="invoice"><span class="ic">📄</span> Proforma Invoice</button>
+      <button data-view="clients"><span class="ic">👥</span> Client Database</button>
+      <button data-view="account"><span class="ic">💼</span> Account</button>
+      <button data-view="payment"><span class="ic">💵</span> Payment</button>
+      <button data-view="report"><span class="ic">📈</span> Report</button>
+    </nav>
+    <a class="back" href="https://fabianantwi1013-ship-it.github.io/ethan-foods/" target="_blank">↗ Open website</a>
+    <a class="back" href="#" id="lock-btn" style="margin-top:.4rem">🔒 Lock workspace</a>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <h1 id="page-title">Overview</h1>
+        <div class="sub" id="stamp">—</div>
+      </div>
+      <div class="top-actions">
+        <span class="reg-pill"><span class="dot"></span> <span id="reg-pill-label">Register open · Till #1</span></span>
+        <div class="range">
+          <button data-days="1">Today</button>
+          <button class="active" data-days="7">7 days</button>
+          <button data-days="30">30 days</button>
+          <button data-days="90">90 days</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo-note" id="data-note">📊 Demo mode — all figures below are realistic sample data.</div>
+
+    <!-- ================= OVERVIEW ================= -->
+    <section class="view active" id="view-overview">
+      <div class="grid kpis">
+        <div class="panel kpi" id="kpi-gross">
+          <div class="label">Gross Sales <span>💰</span></div>
+          <div class="value">—</div>
+          <div class="delta up">—</div>
+        </div>
+        <div class="panel kpi" id="kpi-tx">
+          <div class="label">Transactions <span>🧾</span></div>
+          <div class="value">—</div>
+          <div class="delta up">—</div>
+        </div>
+        <div class="panel kpi" id="kpi-avg">
+          <div class="label">Avg. Ticket <span>🎯</span></div>
+          <div class="value">—</div>
+          <div class="delta up" style="visibility:hidden">.</div>
+        </div>
+        <div class="panel kpi" id="kpi-items">
+          <div class="label">Packs Sold <span>🧃</span></div>
+          <div class="value">—</div>
+          <div class="delta up" style="visibility:hidden">.</div>
+        </div>
+      </div>
+
+      <div class="grid two-col mt">
+        <div class="panel">
+          <h3>Top Products <span class="hint">and who buys them most</span></h3>
+          <div class="rank" id="top-products"></div>
+        </div>
+        <div class="panel">
+          <h3>Stock Alerts <span class="hint">what to reorder, and when</span></h3>
+          <div class="alerts" id="alerts"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= ORDERS ================= -->
+    <section class="view" id="view-orders">
+      <div class="panel">
+        <div class="toolbar">
+          <input type="search" id="order-search" placeholder="Search order # or customer…">
+          <select id="order-status">
+            <option value="all">All statuses</option>
+            <option>Completed</option>
+            <option>Processing</option>
+            <option>Pending</option>
+            <option>Refunded</option>
+          </select>
+          <select id="order-channel">
+            <option value="all">All channels</option>
+            <option>Online</option>
+            <option>In-store</option>
+            <option>Wholesale</option>
+          </select>
+          <button class="btn btn-ginger" onclick="alert('Demo: export would download a CSV of the filtered orders.')">⬇ Export CSV</button>
+        </div>
+        <div class="tbl-scroll">
+          <table class="tbl">
+            <thead><tr><th>Order</th><th>Date</th><th>Customer</th><th>Items</th><th>Channel</th><th>Payment</th><th>Status</th><th class="num">Total</th></tr></thead>
+            <tbody id="orders-body"></tbody>
+          </table>
+        </div>
+        <p class="muted mt" id="orders-count"></p>
+      </div>
+    </section>
+
+    <!-- ================= INVENTORY ================= -->
+    <section class="view" id="view-inventory">
+      <div class="grid kpis">
+        <div class="panel kpi"><div class="label">Units on Hand</div><div class="value" id="inv-units">—</div></div>
+        <div class="panel kpi"><div class="label">Inventory at Cost</div><div class="value" id="inv-cost">—</div></div>
+        <div class="panel kpi"><div class="label">Retail Value</div><div class="value" id="inv-retail">—</div></div>
+        <div class="panel kpi"><div class="label">Low-stock SKUs</div><div class="value" id="inv-low">—</div></div>
+      </div>
+      <div class="panel mt">
+        <h3>Stock Levels <span class="hint">velocity is based on the last 30 days of sales</span></h3>
+        <div class="tbl-scroll">
+          <table class="tbl">
+            <thead><tr><th>Product</th><th>SKU</th><th class="num">Price</th><th class="num">Cost</th><th class="num">On hand</th><th>Level</th><th class="num">Sold (30d)</th><th class="num">Runs out in</th><th>Status</th></tr></thead>
+            <tbody id="inv-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= WEBSITE ORDERS ================= -->
+    <section class="view" id="view-weborders">
+      <div class="panel">
+        <h3>Website Orders <span class="hint">placed through the shop's checkout — contact details included</span></h3>
+        <div class="toolbar">
+          <span class="muted" id="sync-status" style="font-size:.8rem">—</span>
+          <button class="btn btn-line" id="sync-now" type="button">🔄 Sync now</button>
+          <button class="btn btn-line" id="sync-connect" type="button">🔑 Connect sync</button>
+        </div>
+        <div class="tbl-scroll">
+          <table class="tbl">
+            <thead><tr><th>Order</th><th>Received</th><th>Customer</th><th>Contact</th><th>Items</th><th class="num">Total</th><th>Status</th><th></th></tr></thead>
+            <tbody id="weborders-body"></tbody>
+          </table>
+        </div>
+        <p class="muted" style="margin-top:.8rem">Orders placed in this browser appear instantly. <b>Create invoice</b> saves the customer to the Client Database and opens a proforma invoice for them.</p>
+      </div>
+    </section>
+
+    <!-- ================= SALES (new sale form) ================= -->
+    <section class="view" id="view-sales">
+      <form id="sale-form" class="grid two-col" style="align-items:start">
+        <div>
+          <div class="panel">
+            <h3>Personal Information <span class="hint">who is this sale for?</span></h3>
+            <div class="wform">
+              <div class="full"><label>Existing client (optional — fills the form for you)</label>
+                <select id="s-existing"><option value="">— New client —</option></select>
+              </div>
+              <div><label>Full name *</label><input id="s-name" required placeholder="e.g. Maame Efua"></div>
+              <div><label>Business name</label><input id="s-business" placeholder="e.g. Efua's Market LLC"></div>
+              <div><label>Phone *</label><input id="s-phone" required placeholder="+1 (555) 000-0000"></div>
+              <div><label>Email</label><input id="s-email" type="email" placeholder="client@email.com"></div>
+              <div class="full"><label>Address</label><input id="s-address" placeholder="Street address"></div>
+              <div><label>City / State</label><input id="s-city" placeholder="Columbus, OH"></div>
+              <div><label>Client type</label>
+                <select id="s-type"><option>Retail</option><option>Wholesale</option><option>Restaurant</option><option>Distributor</option></select>
+              </div>
+            </div>
+          </div>
+          <div class="panel mt">
+            <h3>Order Items</h3>
+            <div id="sale-items"></div>
+            <button type="button" class="btn btn-line" id="add-item" style="margin-top:.6rem">+ Add item</button>
+          </div>
+        </div>
+        <div>
+          <div class="panel">
+            <h3>Charges &amp; Notes</h3>
+            <div class="wform">
+              <div><label>Delivery fee ($)</label><input id="s-delivery" type="number" min="0" step="0.01" value="0"></div>
+              <div><label>Discount ($)</label><input id="s-discount" type="number" min="0" step="0.01" value="0"></div>
+              <div><label>Tax rate (%)</label><input id="s-tax" type="number" min="0" step="0.1" value="6.5"></div>
+              <div><label>Valid for (days)</label><input id="s-valid" type="number" min="1" value="14"></div>
+              <div class="full"><label>Notes</label><textarea id="s-notes" rows="3" placeholder="Delivery instructions, agreed terms…"></textarea></div>
+            </div>
+            <div class="sale-summary">
+              <div><span>Subtotal</span><b id="sum-sub">$0.00</b></div>
+              <div><span>Tax</span><b id="sum-tax">$0.00</b></div>
+              <div class="total"><span>Total</span><b id="sum-total">$0.00</b></div>
+            </div>
+            <button class="btn btn-ginger" type="submit" style="width:100%;margin-top:1rem">Save &amp; Generate Proforma Invoice</button>
+            <p class="muted" style="margin-top:.6rem">Saves the client to the Client Database and opens the proforma invoice, ready to print.</p>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <!-- ================= PROFORMA INVOICE ================= -->
+    <section class="view" id="view-invoice">
+      <div class="toolbar no-print">
+        <button class="btn btn-ginger" id="inv-new">+ New Invoice</button>
+        <select id="inv-select" style="min-width:280px"></select>
+        <button class="btn btn-line" id="inv-print">🖨 Print / Save PDF</button>
+        <button class="btn btn-line" id="inv-pay">Record a payment</button>
+      </div>
+      <div id="invoice-sheet"></div>
+    </section>
+
+    <!-- ================= CLIENT DATABASE ================= -->
+    <section class="view" id="view-clients">
+      <div class="panel">
+        <div class="toolbar">
+          <input type="search" id="client-search" placeholder="Search name, business or phone…">
+          <button class="btn btn-ginger" id="client-toggle" type="button">+ Add client</button>
+        </div>
+        <form id="client-form" class="wform" hidden style="border:1px dashed var(--line);border-radius:12px;padding:1rem;margin-bottom:1rem">
+          <div><label>Full name *</label><input id="c-name" required></div>
+          <div><label>Business name</label><input id="c-business"></div>
+          <div><label>Phone *</label><input id="c-phone" required></div>
+          <div><label>Email</label><input id="c-email" type="email"></div>
+          <div><label>Address</label><input id="c-address"></div>
+          <div><label>City / State</label><input id="c-city"></div>
+          <div class="full"><button class="btn btn-ginger" type="submit">Save client</button></div>
+        </form>
+        <div class="tbl-scroll">
+          <table class="tbl">
+            <thead><tr><th>Client</th><th>Business</th><th>Phone</th><th>Email</th><th>City</th><th class="num">Invoices</th><th class="num">Invoiced</th><th class="num">Balance</th></tr></thead>
+            <tbody id="clients-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= ACCOUNT ================= -->
+    <section class="view" id="view-account">
+      <div class="grid kpis">
+        <div class="panel kpi"><div class="label">Total Invoiced</div><div class="value" id="acc-invoiced">—</div></div>
+        <div class="panel kpi"><div class="label">Payments Received</div><div class="value" id="acc-received">—</div></div>
+        <div class="panel kpi"><div class="label">Outstanding</div><div class="value" id="acc-outstanding">—</div></div>
+        <div class="panel kpi"><div class="label">Unpaid Invoices</div><div class="value" id="acc-unpaid">—</div></div>
+      </div>
+      <div class="panel mt">
+        <h3>Receivables by Client <span class="hint">who owes what</span></h3>
+        <div class="tbl-scroll">
+          <table class="tbl">
+            <thead><tr><th>Client</th><th class="num">Invoices</th><th class="num">Invoiced</th><th class="num">Paid</th><th class="num">Balance</th><th>Status</th></tr></thead>
+            <tbody id="account-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= PAYMENT ================= -->
+    <section class="view" id="view-payment">
+      <div class="grid two-col" style="align-items:start">
+        <div class="panel">
+          <h3>Payment History</h3>
+          <div class="tbl-scroll">
+            <table class="tbl">
+              <thead><tr><th>Date</th><th>Invoice</th><th>Client</th><th>Method</th><th>Reference</th><th class="num">Amount</th></tr></thead>
+              <tbody id="payments-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Record a Payment</h3>
+          <form id="pay-form" class="wform" style="grid-template-columns:1fr">
+            <div><label>Invoice *</label><select id="pay-invoice" required></select></div>
+            <div class="pay-balance muted" id="pay-balance">—</div>
+            <div><label>Amount ($) *</label><input id="pay-amount" type="number" min="0.01" step="0.01" required></div>
+            <div><label>Method</label>
+              <select id="pay-method"><option>Cash</option><option>Card</option><option>Mobile Money</option><option>Bank Transfer</option><option>Check</option></select>
+            </div>
+            <div><label>Date</label><input id="pay-date" type="date"></div>
+            <div><label>Reference / note</label><input id="pay-ref" placeholder="Transaction ID, check no…"></div>
+            <button class="btn btn-ginger" type="submit">Save payment</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= REPORT ================= -->
+    <section class="view" id="view-report">
+      <div class="toolbar no-print">
+        <select id="report-range">
+          <option value="30">Last 30 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="all" selected>All time</option>
+        </select>
+        <button class="btn btn-ginger" id="report-print">🖨 Print report</button>
+      </div>
+      <div class="grid kpis">
+        <div class="panel kpi"><div class="label">Sales Recorded</div><div class="value" id="rep-sales">—</div></div>
+        <div class="panel kpi"><div class="label">Revenue Invoiced</div><div class="value" id="rep-revenue">—</div></div>
+        <div class="panel kpi"><div class="label">Payments Received</div><div class="value" id="rep-received">—</div></div>
+        <div class="panel kpi"><div class="label">Outstanding</div><div class="value" id="rep-outstanding">—</div></div>
+      </div>
+      <div class="grid two-col mt">
+        <div class="panel">
+          <h3>Sales by Month <span class="hint">invoiced totals</span></h3>
+          <div class="hbars" id="report-months"></div>
+        </div>
+        <div class="panel">
+          <h3>Top Clients <span class="hint">by invoiced value</span></h3>
+          <div id="report-clients"></div>
+        </div>
+      </div>
+      <div class="panel mt">
+        <h3>Products Sold <span class="hint">from recorded sales</span></h3>
+        <div class="tbl-scroll">
+          <table class="tbl">
+            <thead><tr><th>Product</th><th class="num">Qty</th><th class="num">Revenue</th></tr></thead>
+            <tbody id="report-products"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script src="assets/js/config.js?v=2"></script>
+<script>
+/* Workspace lock — compares a SHA-256 hash of the entered password with
+   EF_CONFIG.dashboardPasswordHash. The password itself is never stored. */
+(function () {
+  var AUTH_KEY = "ef_dash_auth";
+  var want = (window.EF_CONFIG || {}).dashboardPasswordHash;
+  if (!want) { document.body.classList.remove("locked"); return; }   // no password configured
+
+  function sha256(text) {
+    return crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)).then(function (buf) {
+      return Array.prototype.map.call(new Uint8Array(buf), function (b) {
+        return ("0" + b.toString(16)).slice(-2);
+      }).join("");
+    });
+  }
+
+  try { if (localStorage.getItem(AUTH_KEY) === want) document.body.classList.remove("locked"); } catch (e) {}
+
+  document.getElementById("lock-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var input = document.getElementById("lock-pass");
+    sha256(input.value).then(function (h) {
+      if (h === want) {
+        try { localStorage.setItem(AUTH_KEY, h); } catch (err) {}
+        document.body.classList.remove("locked");
+      } else {
+        document.getElementById("lock-err").textContent = "Wrong password — try again.";
+        input.value = "";
+        var card = document.querySelector(".lock-card");
+        card.classList.remove("shake");
+        void card.offsetWidth;
+        card.classList.add("shake");
+      }
+    });
+  });
+
+  document.getElementById("lock-btn").addEventListener("click", function (e) {
+    e.preventDefault();
+    try { localStorage.removeItem(AUTH_KEY); } catch (err) {}
+    location.reload();
+  });
+})();
+</script>
+<script src="assets/js/dashboard.js?v=4"></script>
+<script src="assets/js/workspace.js?v=4"></script>
+</body>
+</html>
