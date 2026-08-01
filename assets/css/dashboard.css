@@ -189,6 +189,54 @@ button { font-family: inherit; cursor: pointer; }
   color: #8A7A64; padding: 1rem .8rem .35rem;
 }
 
+/* ---------- POS register ---------- */
+.reg-wrap { display: grid; grid-template-columns: 1.35fr 1fr; gap: 1.2rem; align-items: start; }
+.reg-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .9rem; }
+.reg-tile {
+  background: var(--panel, #fff); border: 1.5px solid var(--line); border-radius: 14px;
+  padding: 1rem .8rem .9rem; text-align: center; cursor: pointer; font: inherit;
+  transition: transform .12s, box-shadow .12s, border-color .12s;
+}
+.reg-tile:hover { transform: translateY(-2px); border-color: var(--gold); box-shadow: 0 8px 22px rgba(60, 42, 20, .12); }
+.reg-tile:active { transform: scale(.97); }
+.reg-tile img { height: 72px; object-fit: contain; margin-bottom: .5rem; }
+.reg-tile b { display: block; font-size: .82rem; line-height: 1.25; }
+.reg-tile span { font-size: .78rem; color: var(--ginger); font-weight: 800; }
+.reg-tile.custom { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 150px; color: var(--muted); border-style: dashed; }
+
+.reg-lines { min-height: 90px; border-bottom: 1px dashed var(--line); padding-bottom: .5rem; }
+.reg-line { display: grid; grid-template-columns: 1fr auto auto 28px; gap: .5rem; align-items: center; padding: .4rem 0; font-size: .86rem; }
+.reg-line .qtyc { display: flex; align-items: center; gap: .45rem; }
+.reg-line .qtyc button {
+  width: 24px; height: 24px; border-radius: 7px; border: 1px solid var(--line);
+  background: #fff; font-weight: 800; cursor: pointer; line-height: 1;
+}
+.reg-line .amt { font-weight: 700; font-variant-numeric: tabular-nums; }
+.reg-line .rm { background: none; border: 0; color: var(--red); font-size: 1.05rem; font-weight: 800; cursor: pointer; }
+.reg-empty { color: var(--muted); font-size: .85rem; text-align: center; padding: 1.6rem 0; }
+
+.pay-methods { display: grid; grid-template-columns: repeat(3, 1fr); gap: .55rem; margin-top: .9rem; }
+.pay-methods button {
+  padding: .65rem .3rem; border: 1.5px solid var(--line); border-radius: 10px; background: #fff;
+  font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer;
+}
+.pay-methods button.active { border-color: var(--ginger); background: var(--gold-soft, #FBF3DF); box-shadow: inset 0 0 0 1px var(--ginger); }
+.reg-change { font-size: 1.15rem; font-weight: 800; padding: .5rem 0; font-variant-numeric: tabular-nums; }
+
+/* receipt (80mm style) */
+.receipt {
+  width: 330px; margin: 0 auto; background: #fff; border: 1px solid var(--line); border-radius: 10px;
+  padding: 1.4rem 1.2rem; font-family: "Consolas", "Courier New", monospace; font-size: .78rem;
+  box-shadow: var(--shadow); line-height: 1.5;
+}
+.receipt .rc-center { text-align: center; }
+.receipt .rc-center img { height: 44px; margin-bottom: .3rem; }
+.receipt hr { border: 0; border-top: 1px dashed #bbb; margin: .6rem 0; }
+.receipt .rc-row { display: flex; justify-content: space-between; gap: .8rem; }
+.receipt .rc-row.big { font-size: .95rem; font-weight: 800; }
+
+@media (max-width: 900px) { .reg-wrap { grid-template-columns: 1fr; } }
+
 /* ---------- clickable KPI cards + detail modal ---------- */
 .kpi[data-detail] { cursor: pointer; transition: transform .15s, box-shadow .15s; }
 .kpi[data-detail]:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(60, 42, 20, .13); }

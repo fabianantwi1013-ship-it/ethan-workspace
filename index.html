@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/css/dashboard.css?v=4">
+<link rel="stylesheet" href="assets/css/dashboard.css?v=6">
 </head>
 <body class="locked">
 <style>
@@ -59,6 +59,9 @@
       <b>Ethan Foods<span>POS Dashboard</span></b>
     </div>
     <nav>
+      <span class="nav-group">Point of Sale</span>
+      <button data-view="register"><span class="ic">🛒</span> Register</button>
+      <button data-view="eod"><span class="ic">🗓️</span> Day Summary</button>
       <span class="nav-group">Store</span>
       <button class="active" data-view="overview"><span class="ic">📊</span> Overview</button>
       <button data-view="orders"><span class="ic">🧾</span> Orders</button>
@@ -95,6 +98,87 @@
     </div>
 
     <div class="demo-note" id="data-note">📊 Demo mode — all figures below are realistic sample data.</div>
+
+    <!-- ================= REGISTER (POS sell screen) ================= -->
+    <section class="view" id="view-register">
+      <div class="reg-wrap" id="reg-sell">
+        <div>
+          <div class="reg-tiles" id="reg-tiles"></div>
+        </div>
+        <div class="panel reg-ticket">
+          <h3>Current Sale <span class="hint" id="reg-next-no"></span></h3>
+          <div class="reg-lines" id="reg-lines"></div>
+          <div class="wform" style="grid-template-columns:1fr 1fr;margin-top:.8rem">
+            <div><label>Discount ($)</label><input id="reg-disc" type="number" min="0" step="0.01" value="0"></div>
+            <div><label>Tax (%)</label><input id="reg-tax" type="number" min="0" step="0.1" value="6.5"></div>
+            <div class="full"><label>Customer</label><select id="reg-cust"></select></div>
+          </div>
+          <div class="sale-summary">
+            <div><span>Subtotal</span><b id="reg-sub">$0.00</b></div>
+            <div><span>Tax</span><b id="reg-taxv">$0.00</b></div>
+            <div class="total"><span>Total</span><b id="reg-total">$0.00</b></div>
+          </div>
+          <div class="pay-methods" id="reg-methods">
+            <button type="button" data-method="Cash">💵 Cash</button>
+            <button type="button" data-method="Card">💳 Card</button>
+            <button type="button" data-method="Mobile Money">📱 Mobile</button>
+          </div>
+          <div id="reg-cash-row" hidden>
+            <div class="wform" style="grid-template-columns:1fr 1fr">
+              <div><label>Cash received ($)</label><input id="reg-tendered" type="number" min="0" step="0.01"></div>
+              <div><label>Change due</label><div class="reg-change" id="reg-change">$0.00</div></div>
+            </div>
+          </div>
+          <button class="btn btn-ginger" id="reg-complete" style="width:100%;margin-top:.9rem">Complete Sale</button>
+          <button class="btn-linklike" id="reg-clear" style="margin-top:.5rem">Clear sale</button>
+        </div>
+      </div>
+
+      <div id="reg-done" hidden>
+        <div class="toolbar no-print" style="justify-content:center">
+          <button class="btn btn-ginger" id="reg-print">🖨 Print receipt</button>
+          <button class="btn btn-line" id="reg-new">＋ New sale</button>
+        </div>
+        <div class="receipt" id="reg-receipt"></div>
+      </div>
+    </section>
+
+    <!-- ================= DAY SUMMARY (end of day) ================= -->
+    <section class="view" id="view-eod">
+      <div class="toolbar no-print">
+        <input type="date" id="eod-date">
+        <button class="btn btn-ginger" id="eod-print">🖨 Print day report</button>
+      </div>
+      <div class="grid kpis">
+        <div class="panel kpi"><div class="label">Register Sales</div><div class="value" id="eod-count">—</div></div>
+        <div class="panel kpi"><div class="label">Register Takings</div><div class="value" id="eod-gross">—</div></div>
+        <div class="panel kpi"><div class="label">Cash in Drawer</div><div class="value" id="eod-cash">—</div></div>
+        <div class="panel kpi"><div class="label">All Payments Received</div><div class="value" id="eod-received">—</div></div>
+      </div>
+      <div class="grid two-col mt">
+        <div class="panel">
+          <h3>Takings by Payment Method</h3>
+          <div class="tbl-scroll"><table class="tbl">
+            <thead><tr><th>Method</th><th class="num">Payments</th><th class="num">Amount</th></tr></thead>
+            <tbody id="eod-pay"></tbody>
+          </table></div>
+        </div>
+        <div class="panel">
+          <h3>Products Sold (register)</h3>
+          <div class="tbl-scroll"><table class="tbl">
+            <thead><tr><th>Product</th><th class="num">Qty</th><th class="num">Revenue</th></tr></thead>
+            <tbody id="eod-prod"></tbody>
+          </table></div>
+        </div>
+      </div>
+      <div class="panel mt">
+        <h3>Register Sales <span class="hint">for the selected day</span></h3>
+        <div class="tbl-scroll"><table class="tbl">
+          <thead><tr><th>Receipt</th><th>Customer</th><th>Items</th><th>Payment</th><th class="num">Total</th></tr></thead>
+          <tbody id="eod-list"></tbody>
+        </table></div>
+      </div>
+    </section>
 
     <!-- ================= OVERVIEW ================= -->
     <section class="view active" id="view-overview">
@@ -374,7 +458,7 @@
   </main>
 </div>
 
-<script src="assets/js/config.js?v=2"></script>
+<script src="assets/js/config.js?v=6"></script>
 <script>
 /* Workspace lock — compares a SHA-256 hash of the entered password with
    EF_CONFIG.dashboardPasswordHash. The password itself is never stored. */
@@ -418,7 +502,7 @@
   });
 })();
 </script>
-<script src="assets/js/dashboard.js?v=4"></script>
-<script src="assets/js/workspace.js?v=4"></script>
+<script src="assets/js/dashboard.js?v=6"></script>
+<script src="assets/js/workspace.js?v=6"></script>
 </body>
 </html>

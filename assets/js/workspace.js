@@ -72,7 +72,7 @@
   /* ================= helpers ================= */
   function clientOf(sale) {
     return db.clients.filter(function (c) { return c.id === sale.clientId; })[0] ||
-           { name: "Unknown", business: "", phone: "", email: "", address: "", city: "" };
+           { name: "Walk-in customer", business: "", phone: "", email: "", address: "", city: "" };
   }
   function subtotal(sale) {
     return sale.items.reduce(function (a, i) { return a + i.qty * i.price; }, 0);
@@ -456,6 +456,260 @@
     });
   }
 
+  /* ================= POS REGISTER ================= */
+  var IMG_RULES = [
+    ["mango", "le-ginger-mango"],
+    ["sobolo", "sobolo-hibiscus"], ["hibiscus", "sobolo-hibiscus"], ["sorrel", "sobolo-hibiscus"],
+    ["moringa", "le-ginger-moringa"],
+    ["pineapple", "le-ginger-pineapple"],
+    ["turmeric", "le-ginger-turmeric"], ["tumeric", "le-ginger-turmeric"],
+    ["regular", "le-ginger-regular"]
+  ];
+  function matchImg(name) {
+    var n = (name || "").toLowerCase();
+    for (var i = 0; i < IMG_RULES.length; i++) {
+      if (n.indexOf(IMG_RULES[i][0]) >= 0) return "assets/img/products/" + IMG_RULES[i][1] + "-cutout.png";
+    }
+    return "assets/img/brand/ethan-foods-mark.png";
+  }
+  function shortName(name) {
+    return (name || "Item")
+      .replace(/8\s*(juice\s*)?pack[^a-z0-9]*(juice\s*)?(of\s*)?/i, "")
+      .replace(/\s*\((mild|spicy|8 × 16oz)\)\s*/i, "")
+      .replace(/\ble[- ]?ginger[- ]?/i, "").replace(/juice/i, "")
+      .replace(/\s*\(8 × 16oz\)\s*/i, "")
+      .replace(/^[\s—–-]+|[\s—–-]+$/g, "").trim() || name;
+  }
+
+  var ticket = [];              // [{name, price, qty}]
+  var regMethod = null;
+  if (!db.nextReceipt) db.nextReceipt = 1000;
+
+  function regTotals() {
+    var sub = ticket.reduce(function (a, l) { return a + l.qty * l.price; }, 0);
+    var disc = Math.min(sub, parseFloat($("#reg-disc").value) || 0);
+    var taxRate = parseFloat($("#reg-tax").value) || 0;
+    var tax = Math.round((sub - disc) * taxRate) / 100;
+    return { sub: sub, disc: disc, taxRate: taxRate, tax: tax, total: sub - disc + tax };
+  }
+
+  function renderRegTiles() {
+    var host = $("#reg-tiles");
+    if (!host) return;
+    host.innerHTML = CATALOG.filter(function (p) { return p.price > 0; }).map(function (p, i) {
+      return '<button type="button" class="reg-tile" data-tile="' + i + '">' +
+        '<img src="' + matchImg(p.name) + '" alt="">' +
+        "<b>" + esc(shortName(p.name)) + "</b>" +
+        "<span>" + fmt$(p.price) + "</span></button>";
+    }).join("") +
+      '<button type="button" class="reg-tile custom" data-tile="custom"><b style="font-size:1.6rem">＋</b><b>Custom item</b></button>';
+  }
+
+  function renderRegCust() {
+    var sel = $("#reg-cust");
+    if (!sel) return;
+    var cur = sel.value;
+    sel.innerHTML = '<option value="">Walk-in customer</option>' +
+      db.clients.slice().sort(function (a, b) { return a.name.localeCompare(b.name); })
+        .map(function (c) { return '<option value="' + c.id + '">' + esc(c.name) + "</option>"; }).join("");
+    if (cur && $$("option", sel).some(function (o) { return o.value === cur; })) sel.value = cur;
+  }
+
+  function renderTicket() {
+    var host = $("#reg-lines");
+    if (!host) return;
+    $("#reg-next-no").textContent = "receipt R-" + (db.nextReceipt + 1);
+    host.innerHTML = ticket.map(function (l, i) {
+      return '<div class="reg-line"><span>' + esc(l.name) + "<br><small class='muted'>" + fmt$(l.price) + " each</small></span>" +
+        '<span class="qtyc"><button data-reg-dec="' + i + '">−</button><b>' + l.qty + '</b><button data-reg-inc="' + i + '">+</button></span>' +
+        '<span class="amt">' + fmt$(l.qty * l.price) + "</span>" +
+        '<button class="rm" data-reg-rm="' + i + '">×</button></div>';
+    }).join("") || '<div class="reg-empty">Tap a product to start the sale.</div>';
+    var t = regTotals();
+    $("#reg-sub").textContent = fmt$(t.sub - t.disc);
+    $("#reg-taxv").textContent = fmt$(t.tax);
+    $("#reg-total").textContent = fmt$(t.total);
+    paintChange();
+  }
+
+  function paintChange() {
+    var t = regTotals();
+    var tendered = parseFloat($("#reg-tendered").value) || 0;
+    $("#reg-change").textContent = fmt$(Math.max(0, tendered - t.total));
+  }
+
+  function resetRegister() {
+    ticket = []; regMethod = null;
+    $("#reg-disc").value = "0"; $("#reg-tendered").value = "";
+    $$("#reg-methods button").forEach(function (b) { b.classList.remove("active"); });
+    $("#reg-cash-row").hidden = true;
+    $("#reg-cust").value = "";
+    $("#reg-done").hidden = true;
+    $("#reg-sell").hidden = false;
+    renderTicket();
+  }
+
+  function completeSale() {
+    if (!ticket.length) { alert("The sale is empty — tap a product first."); return; }
+    if (!regMethod) { alert("Choose how the customer is paying (Cash, Card or Mobile)."); return; }
+    var t = regTotals();
+    var tendered = parseFloat($("#reg-tendered").value) || 0;
+    if (regMethod === "Cash" && tendered + 0.005 < t.total) {
+      alert("Cash received (" + fmt$(tendered) + ") is less than the total (" + fmt$(t.total) + ").");
+      return;
+    }
+    var sale = {
+      id: db.sales.reduce(function (m, s) { return Math.max(m, s.id); }, 0) + 1,
+      no: "R-" + (++db.nextReceipt),
+      date: todayISO(),
+      clientId: parseInt($("#reg-cust").value, 10) || null,
+      type: "In-store",
+      items: ticket.map(function (l) { return { name: l.name, qty: l.qty, price: l.price }; }),
+      delivery: 0, discount: t.disc, taxRate: t.taxRate, validDays: 0,
+      notes: "Register sale",
+      payments: [{ date: todayISO(), amount: Math.round(t.total * 100) / 100,
+                   method: regMethod, ref: "Register" }]
+    };
+    db.sales.push(sale);
+    save();
+    renderReceipt(sale, regMethod === "Cash" ? tendered : null);
+    $("#reg-sell").hidden = true;
+    $("#reg-done").hidden = false;
+    renderEverything();
+  }
+
+  function renderReceipt(sale, tendered) {
+    var t = { sub: subtotal(sale), disc: sale.discount || 0, tax: taxOf(sale), total: totalOf(sale) };
+    var c = clientOf(sale);
+    var now = new Date();
+    $("#reg-receipt").innerHTML =
+      '<div class="rc-center"><img src="assets/img/brand/ethan-foods-mark.png" alt="">' +
+      "<br><b>ETHAN FOODS</b><br>" + COMPANY.phone + "<br>" + COMPANY.email + "</div><hr>" +
+      '<div class="rc-row"><span>Receipt</span><span>' + sale.no + "</span></div>" +
+      '<div class="rc-row"><span>Date</span><span>' + sale.date + " " +
+      now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) + "</span></div>" +
+      '<div class="rc-row"><span>Customer</span><span>' + esc(c.name) + "</span></div><hr>" +
+      sale.items.map(function (i) {
+        return '<div class="rc-row"><span>' + i.qty + " × " + esc(shortName(i.name)) + "</span><span>" + fmt$(i.qty * i.price) + "</span></div>";
+      }).join("") + "<hr>" +
+      '<div class="rc-row"><span>Subtotal</span><span>' + fmt$(t.sub) + "</span></div>" +
+      (t.disc ? '<div class="rc-row"><span>Discount</span><span>−' + fmt$(t.disc) + "</span></div>" : "") +
+      '<div class="rc-row"><span>Tax</span><span>' + fmt$(t.tax) + "</span></div>" +
+      '<div class="rc-row big"><span>TOTAL</span><span>' + fmt$(t.total) + "</span></div><hr>" +
+      '<div class="rc-row"><span>Paid — ' + esc(sale.payments[0].method) + "</span><span>" +
+      fmt$(tendered !== null ? tendered : t.total) + "</span></div>" +
+      (tendered !== null ? '<div class="rc-row"><span>Change</span><span>' + fmt$(Math.max(0, tendered - t.total)) + "</span></div>" : "") +
+      '<hr><div class="rc-center">Thank you! Think health,<br>choose Le Ginger 🌿<br>ethanfoods.net</div>';
+  }
+
+  if ($("#reg-tiles")) {
+    renderRegTiles();
+    renderTicket();
+    document.addEventListener("click", function (e) {
+      var tile = e.target.closest("[data-tile]");
+      if (tile) {
+        var v = tile.getAttribute("data-tile");
+        var item;
+        if (v === "custom") {
+          var name = prompt("Item name:");
+          if (!name) return;
+          var price = parseFloat(prompt("Price ($):") || "");
+          if (!(price >= 0)) return;
+          item = { name: name.trim(), price: Math.round(price * 100) / 100 };
+        } else {
+          var p = CATALOG.filter(function (x) { return x.price > 0; })[parseInt(v, 10)];
+          item = { name: p.name, price: p.price };
+        }
+        var line = ticket.filter(function (l) { return l.name === item.name && l.price === item.price; })[0];
+        if (line) line.qty++;
+        else ticket.push({ name: item.name, price: item.price, qty: 1 });
+        renderTicket();
+        return;
+      }
+      var inc = e.target.closest("[data-reg-inc]"), dec = e.target.closest("[data-reg-dec]"),
+          rm = e.target.closest("[data-reg-rm]");
+      if (inc || dec || rm) {
+        var i = parseInt((inc || dec || rm).getAttribute(inc ? "data-reg-inc" : dec ? "data-reg-dec" : "data-reg-rm"), 10);
+        if (rm) ticket.splice(i, 1);
+        else if (inc) ticket[i].qty++;
+        else { ticket[i].qty--; if (ticket[i].qty <= 0) ticket.splice(i, 1); }
+        renderTicket();
+        return;
+      }
+      var mb = e.target.closest("#reg-methods button");
+      if (mb) {
+        regMethod = mb.getAttribute("data-method");
+        $$("#reg-methods button").forEach(function (b) { b.classList.toggle("active", b === mb); });
+        $("#reg-cash-row").hidden = regMethod !== "Cash";
+        if (regMethod === "Cash") $("#reg-tendered").focus();
+      }
+    });
+    ["#reg-disc", "#reg-tax"].forEach(function (s) { $(s).addEventListener("input", renderTicket); });
+    $("#reg-tendered").addEventListener("input", paintChange);
+    $("#reg-complete").addEventListener("click", completeSale);
+    $("#reg-clear").addEventListener("click", function () {
+      if (!ticket.length || confirm("Clear this sale?")) resetRegister();
+    });
+    $("#reg-new").addEventListener("click", resetRegister);
+    $("#reg-print").addEventListener("click", function () { window.print(); });
+  }
+
+  /* ================= DAY SUMMARY ================= */
+  function renderEod() {
+    if (!$("#eod-date")) return;
+    if (!$("#eod-date").value) $("#eod-date").value = todayISO();
+    var day = $("#eod-date").value;
+
+    var regSales = db.sales.filter(function (s) { return s.date === day && s.no.indexOf("R-") === 0; });
+    var regGross = regSales.reduce(function (a, s) { return a + totalOf(s); }, 0);
+
+    var pays = [];
+    db.sales.forEach(function (s) {
+      (s.payments || []).forEach(function (p) { if (p.date === day) pays.push(p); });
+    });
+    var received = pays.reduce(function (a, p) { return a + p.amount; }, 0);
+    var cash = pays.filter(function (p) { return p.method === "Cash"; })
+      .reduce(function (a, p) { return a + p.amount; }, 0);
+
+    $("#eod-count").textContent = regSales.length;
+    $("#eod-gross").textContent = fmt$(regGross);
+    $("#eod-cash").textContent = fmt$(cash);
+    $("#eod-received").textContent = fmt$(received);
+
+    var byM = {};
+    pays.forEach(function (p) {
+      byM[p.method] = byM[p.method] || { n: 0, amt: 0 };
+      byM[p.method].n++; byM[p.method].amt += p.amount;
+    });
+    $("#eod-pay").innerHTML = Object.keys(byM).sort(function (a, b) { return byM[b].amt - byM[a].amt; })
+      .map(function (k) {
+        return "<tr><td>" + esc(k) + '</td><td class="num">' + byM[k].n + '</td><td class="num"><b>' + fmt$(byM[k].amt) + "</b></td></tr>";
+      }).join("") || "<tr><td colspan='3' class='muted' style='padding:1.2rem;text-align:center'>No payments this day.</td></tr>";
+
+    var byP = {};
+    regSales.forEach(function (s) {
+      s.items.forEach(function (i) {
+        byP[i.name] = byP[i.name] || { qty: 0, rev: 0 };
+        byP[i.name].qty += i.qty; byP[i.name].rev += i.qty * i.price;
+      });
+    });
+    $("#eod-prod").innerHTML = Object.keys(byP).sort(function (a, b) { return byP[b].rev - byP[a].rev; })
+      .map(function (k) {
+        return "<tr><td>" + esc(shortName(k)) + '</td><td class="num">' + byP[k].qty + '</td><td class="num"><b>' + fmt$(byP[k].rev) + "</b></td></tr>";
+      }).join("") || "<tr><td colspan='3' class='muted' style='padding:1.2rem;text-align:center'>No register sales this day.</td></tr>";
+
+    $("#eod-list").innerHTML = regSales.slice().reverse().map(function (s) {
+      return "<tr><td><b>" + s.no + "</b></td><td>" + esc(clientOf(s).name) + "</td>" +
+        "<td>" + s.items.map(function (i) { return i.qty + "× " + esc(shortName(i.name)); }).join(", ") + "</td>" +
+        "<td>" + esc((s.payments[0] || {}).method || "—") + "</td>" +
+        '<td class="num"><b>' + fmt$(totalOf(s)) + "</b></td></tr>";
+    }).join("") || "<tr><td colspan='5' class='muted' style='padding:1.2rem;text-align:center'>No register sales this day.</td></tr>";
+  }
+  if ($("#eod-date")) {
+    $("#eod-date").addEventListener("change", renderEod);
+    $("#eod-print").addEventListener("click", function () { window.print(); });
+  }
+
   /* ================= WEBSITE ORDERS (from the shop checkout) ================= */
   var WEB_KEY = "ef_web_orders_v1";
   function webOrders() {
@@ -647,6 +901,8 @@
   /* ================= boot ================= */
   function renderEverything() {
     renderWebOrders();
+    renderRegCust();
+    renderEod();
     renderClientPicker();
     renderInvoiceSelect();
     renderInvoice();
