@@ -9,6 +9,7 @@
   var fmt$ = function (n) {
     return "$" + (n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
+  var fmt$0 = function (n) { return "$" + Math.round(n || 0).toLocaleString("en-US"); };
   var esc = function (s) {
     return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
@@ -1076,6 +1077,41 @@
       return '<div class="hbar"><span style="width:74px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(x.name) +
         '</span><div class="track"><i style="width:' + (x.v / maxC * 100) + '%"></i></div><span class="num">' + fmt$(x.v) + "</span></div>";
     }).join("") || '<p class="muted">No sales in this period.</p>';
+
+    // sales by US season — across ALL recorded sales, so the yearly pattern shows
+    if ($("#report-seasons")) {
+      var SEASONS = [
+        { key: "Summer", label: "☀️ Summer", months: [5, 6, 7], hint: "Jun–Aug" },
+        { key: "Fall",   label: "🍂 Fall",   months: [8, 9, 10], hint: "Sep–Nov" },
+        { key: "Winter", label: "❄️ Winter", months: [11, 0, 1], hint: "Dec–Feb" },
+        { key: "Spring", label: "🌱 Spring", months: [2, 3, 4], hint: "Mar–May" }
+      ];
+      var seasonAgg = {};
+      SEASONS.forEach(function (s) { seasonAgg[s.key] = { rev: 0, packs: 0, n: 0 }; });
+      db.sales.forEach(function (s) {
+        var m = new Date(s.date).getMonth();
+        var season = SEASONS.filter(function (x) { return x.months.indexOf(m) >= 0; })[0];
+        if (!season) return;
+        var a = seasonAgg[season.key];
+        a.rev += totalOf(s);
+        a.n++;
+        a.packs += s.items.reduce(function (t, i) { return t + i.qty; }, 0);
+      });
+      var maxRev = Math.max.apply(null, SEASONS.map(function (s) { return seasonAgg[s.key].rev; })) || 1;
+      $("#report-seasons").innerHTML = SEASONS.map(function (s) {
+        var a = seasonAgg[s.key];
+        return '<div class="hbar"><span title="' + s.hint + '">' + s.label +
+          '</span><div class="track"><i style="width:' + (a.rev / maxRev * 100) + '%"></i></div>' +
+          '<span class="num">' + fmt$0(a.rev) + "<br><small class='muted' style='font-weight:400'>" +
+          a.packs + " packs · " + a.n + " sales</small></span></div>";
+      }).join("");
+      var best = SEASONS.slice().sort(function (a, b) { return seasonAgg[b.key].rev - seasonAgg[a.key].rev; })[0];
+      var bestAgg = seasonAgg[best.key];
+      $("#report-season-note").innerHTML = bestAgg.rev
+        ? "🏆 Best season so far: <b>" + best.label + " (" + best.hint + ")</b> with " +
+          fmt$0(bestAgg.rev) + " from " + bestAgg.packs + " packs. This gets more reliable as more sales are recorded across the year."
+        : "Record sales through the year and this will show which season sells most.";
+    }
 
     // returns & spoilage losses for the same period
     if ($("#rep-loss")) {
