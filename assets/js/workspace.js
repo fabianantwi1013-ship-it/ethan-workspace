@@ -33,6 +33,23 @@
     { name: "Custom item…", price: 0 }
   ];
 
+  /* ================= shell: nav + date stamp ================= */
+  var stampEl = $("#stamp");
+  if (stampEl) {
+    stampEl.textContent = new Date().toLocaleDateString("en-US",
+      { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  }
+  $$(".side nav button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      $$(".side nav button").forEach(function (x) { x.classList.remove("active"); });
+      b.classList.add("active");
+      $$(".view").forEach(function (v) { v.classList.remove("active"); });
+      var view = $("#view-" + b.getAttribute("data-view"));
+      if (view) view.classList.add("active");
+      $("#page-title").textContent = b.textContent.replace(/\d+$/, "").trim();
+    });
+  });
+
   /* ================= storage ================= */
   var KEY = "ef_workspace_v1";
   var db;
