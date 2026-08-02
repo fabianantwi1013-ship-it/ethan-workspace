@@ -401,6 +401,25 @@
     sinvSel.addEventListener("change", renderSInvoice);
     $("#sinv-print").addEventListener("click", function () { window.print(); });
     $("#sinv-pay").addEventListener("click", function () { goToPayment($("#sinv-select").value); });
+    $("#sinv-paid").addEventListener("click", function () {
+      var s = db.sales.filter(function (x) { return x.id === parseInt($("#sinv-select").value, 10); })[0];
+      if (!s) { alert("Choose a sales invoice first."); return; }
+      var bal = balanceOf(s);
+      if (bal <= 0.005) { alert(displayNo(s) + " is already fully paid."); return; }
+      var method = prompt("Mark " + displayNo(s) + " as PAID — " + fmt$(bal) + " received.\n\n" +
+        "How was it paid? (Cash, Card, Mobile Money, Bank Transfer, Check)", "Cash");
+      if (method === null) return;
+      s.payments = s.payments || [];
+      s.payments.push({
+        date: todayISO(),
+        amount: Math.round(bal * 100) / 100,
+        method: (method.trim() || "Cash"),
+        ref: "Marked paid in full"
+      });
+      save();
+      renderEverything();
+      renderSInvoice();
+    });
   }
 
   /* ================= CLIENT DATABASE ================= */
