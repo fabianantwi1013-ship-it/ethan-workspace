@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/css/dashboard.css?v=15">
+<link rel="stylesheet" href="assets/css/dashboard.css?v=16">
 </head>
 <body class="locked">
 <style>
@@ -104,8 +104,11 @@
               <div><label>Document to create</label>
                 <select id="s-doctype">
                   <option value="proforma">Proforma invoice (quote)</option>
-                  <option value="invoice">Sales invoice (final)</option>
+                  <option value="invoice">Sales invoice (final — issued as PAID)</option>
                 </select>
+              </div>
+              <div id="s-paymethod-wrap" hidden><label>Paid by</label>
+                <select id="s-paymethod"><option>Cash</option><option>Card</option><option>Mobile Money</option><option>Bank Transfer</option><option>Check</option></select>
               </div>
             </div>
           </div>
@@ -338,7 +341,7 @@
   </main>
 </div>
 
-<script src="assets/js/config.js?v=15"></script>
+<script src="assets/js/config.js?v=16"></script>
 <script>
 /* Workspace lock — compares a SHA-256 hash of the entered password with
    EF_CONFIG.dashboardPasswordHash. The password itself is never stored. */
@@ -382,6 +385,6 @@
   });
 })();
 </script>
-<script src="assets/js/workspace.js?v=15"></script>
+<script src="assets/js/workspace.js?v=16"></script>
 </body>
 </html>

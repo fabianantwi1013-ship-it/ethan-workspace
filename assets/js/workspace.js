@@ -212,6 +212,13 @@
     });
   }
 
+  var docTypeSel = $("#s-doctype");
+  if (docTypeSel && $("#s-paymethod-wrap")) {
+    docTypeSel.addEventListener("change", function () {
+      $("#s-paymethod-wrap").hidden = docTypeSel.value !== "invoice";
+    });
+  }
+
   if (itemsHost) {
     var head = document.createElement("div");
     head.className = "item-head";
@@ -260,6 +267,15 @@
         notes: $("#s-notes").value.trim(),
         payments: []
       };
+      // a final sales invoice is issued once payment is received — record it as PAID
+      if (docType === "invoice") {
+        sale.payments.push({
+          date: todayISO(),
+          amount: Math.round(totalOf(sale) * 100) / 100,
+          method: $("#s-paymethod") ? $("#s-paymethod").value : "Cash",
+          ref: "Paid on issue"
+        });
+      }
       db.sales.push(sale);
       save();
 
@@ -380,9 +396,20 @@
       var id = parseInt($("#inv-select").value, 10);
       var s = db.sales.filter(function (x) { return x.id === id; })[0];
       if (!s) { alert("Choose a proforma invoice first."); return; }
-      if (!confirm("Convert " + s.no + " into a final sales invoice?")) return;
+      if (!confirm("Convert " + s.no + " into a final sales invoice?\n\nIt will be issued as PAID — the remaining balance is recorded as received.")) return;
       s.docType = "invoice";
       s.invNo = "INV-" + (++db.nextInv);
+      var bal = balanceOf(s);
+      if (bal > 0.005) {
+        var method = prompt("How was the " + fmt$(bal) + " paid? (Cash, Card, Mobile Money, Bank Transfer, Check)", "Cash");
+        s.payments = s.payments || [];
+        s.payments.push({
+          date: todayISO(),
+          amount: Math.round(bal * 100) / 100,
+          method: (method || "Cash").trim() || "Cash",
+          ref: "Paid on issue"
+        });
+      }
       save();
       renderEverything();
       $("#sinv-select").value = s.id;
