@@ -1,8 +1,9 @@
 /* Ethan Foods POS — Electron main process.
    Phase 1: wrap the existing web app (../index.html) in a desktop window.
    The UI is loaded from the repo root, unchanged — same files GitHub Pages serves. */
-const { app, BrowserWindow, Menu } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain } = require("electron");
 const path = require("path");
+const storage = require("./storage");
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -25,6 +26,17 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  const dbFile = storage.init();
+  console.log("SQLite:", dbFile);
+
+  // load is sendSync: the web app reads its data once, synchronously, at boot
+  ipcMain.on("storage:load", (e) => { e.returnValue = storage.load(); });
+  // saves are fire-and-forget; better-sqlite3 is synchronous in the main process
+  ipcMain.on("storage:save", (e, blob) => {
+    try { storage.save(blob); } catch (err) { console.error("save failed:", err); }
+  });
+  ipcMain.handle("storage:pending", () => storage.pendingCount());
+
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

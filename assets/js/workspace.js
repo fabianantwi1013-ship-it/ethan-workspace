@@ -52,10 +52,27 @@
   });
 
   /* ================= storage ================= */
+  /* Desktop app (Electron): SQLite via the preload bridge — offline-first, synced later.
+     Web app (browser): localStorage, exactly as before. Same code, same data shape. */
   var KEY = "ef_workspace_v1";
+  var DSTORE = (window.desktop && window.desktop.storage) || null;
   var db;
 
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {} }
+  function save() {
+    if (DSTORE) { try { DSTORE.save(db); } catch (e) {} }
+    try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {}
+  }
+
+  function loadPersisted() {
+    if (DSTORE) {
+      try {
+        var fromSql = DSTORE.load();
+        if (fromSql) return fromSql;
+      } catch (e) {}
+      // first desktop run: migrate whatever localStorage holds into SQLite via save()
+    }
+    try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; }
+  }
 
   function seed() {
     return {
@@ -82,7 +99,7 @@
   }
 
   try {
-    db = JSON.parse(localStorage.getItem(KEY));
+    db = loadPersisted();
     if (!db || !db.sales) db = seed();
   } catch (e) { db = seed(); }
   // migrations
