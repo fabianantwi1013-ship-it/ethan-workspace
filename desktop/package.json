@@ -1,0 +1,15 @@
+{
+  "name": "ethan-pos",
+  "productName": "Ethan Foods POS",
+  "version": "0.1.0",
+  "description": "Ethan Foods sales office & POS — offline-first desktop app",
+  "main": "main.js",
+  "author": "Ethan Foods",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^38.2.0"
+  }
+}
