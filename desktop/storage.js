@@ -40,6 +40,18 @@ function init(dirOverride) {
     )`);
   }
   db.exec("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)");
+  // losing sides of conflicts are archived here, never silently discarded
+  db.exec(`CREATE TABLE IF NOT EXISTS conflict_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    table_name TEXT NOT NULL,
+    uuid TEXT NOT NULL,
+    local_json TEXT NOT NULL,
+    remote_json TEXT NOT NULL,
+    local_updated INTEGER,
+    remote_updated INTEGER,
+    resolved TEXT NOT NULL,
+    logged_at INTEGER NOT NULL
+  )`);
   if (!getMeta("device_id")) setMeta("device_id", crypto.randomUUID());
   return file;
 }
@@ -128,4 +140,86 @@ function pendingCount() {
   return n;
 }
 
-module.exports = { init, load, save, pendingCount, getMeta, setMeta, TABLES };
+/* ---------- sync support ---------- */
+
+/* Rows waiting to go up. updated_at is returned so markSynced can detect a row
+   that was edited again while the push was in flight (don't clear its flag). */
+function unsyncedRows(limit) {
+  const out = [];
+  for (const t of TABLES) {
+    const rows = db.prepare(
+      `SELECT id, uuid, json, updated_at, deleted FROM ${t} WHERE synced = 0 ORDER BY updated_at LIMIT ?`
+    ).all(limit || 500);
+    for (const r of rows) out.push({ table: t, ...r });
+    if (out.length >= (limit || 500)) break;
+  }
+  return out;
+}
+
+function markSynced(rows) {
+  const tx = db.transaction(() => {
+    for (const r of rows) {
+      db.prepare(`UPDATE ${r.table} SET synced = 1 WHERE uuid = ? AND updated_at = ?`)
+        .run(r.uuid, r.updated_at);
+    }
+  });
+  tx();
+}
+
+/* Apply rows pulled from the cloud.
+   Conflict rule: last-write-wins by updated_at.
+   - remote newer  -> overwrite locally (archive the local copy if it was unsynced)
+   - local newer   -> keep local, leave it unsynced so the next push wins
+   - equal         -> treat as already in agreement, just clear the flag */
+function applyRemote(remoteRows) {
+  const myDevice = getMeta("device_id");
+  const now = Date.now();
+  const tx = db.transaction(() => {
+    for (const rr of remoteRows) {
+      const t = rr.table_name;
+      if (!TABLES.includes(t)) continue;
+      const local = db.prepare(`SELECT id, uuid, json, updated_at, deleted, synced FROM ${t} WHERE uuid = ?`).get(rr.uuid);
+
+      // `id` is a per-device numeric key; identity across devices is the uuid.
+      // Rewrite the incoming payload to carry THIS device's id, otherwise the
+      // next local save would see a phantom difference and re-dirty the row.
+      const localId = local ? local.id
+        : (db.prepare(`SELECT COALESCE(MAX(id), 0) m FROM ${t}`).get().m) + 1;
+      const remoteObj = Object.assign({}, rr.json, { id: localId });
+      const remoteJson = JSON.stringify(remoteObj);
+
+      if (!local) {
+        db.prepare(`INSERT INTO ${t} (id, uuid, json, updated_at, deleted, synced)
+                    VALUES (?, ?, ?, ?, ?, 1)`)
+          .run(localId, rr.uuid, remoteJson, rr.updated_at, rr.deleted ? 1 : 0);
+        continue;
+      }
+
+      if (rr.updated_at > local.updated_at) {
+        // Archive whenever another device's version replaces different local content —
+        // even if ours was already pushed, since that local version is about to vanish.
+        if (local.json !== remoteJson && rr.device_id && rr.device_id !== myDevice) {
+          db.prepare(`INSERT INTO conflict_log
+            (table_name, uuid, local_json, remote_json, local_updated, remote_updated, resolved, logged_at)
+            VALUES (?, ?, ?, ?, ?, ?, 'remote-won', ?)`)
+            .run(t, rr.uuid, local.json, remoteJson, local.updated_at, rr.updated_at, now);
+        }
+        db.prepare(`UPDATE ${t} SET json = ?, updated_at = ?, deleted = ?, synced = 1 WHERE uuid = ?`)
+          .run(remoteJson, rr.updated_at, rr.deleted ? 1 : 0, rr.uuid);
+      } else if (rr.updated_at === local.updated_at && local.json === remoteJson) {
+        db.prepare(`UPDATE ${t} SET synced = 1 WHERE uuid = ?`).run(rr.uuid);
+      }
+      // local newer: leave as-is; it is still unsynced and will overwrite remotely
+    }
+  });
+  tx();
+}
+
+function conflicts(limit) {
+  return db.prepare("SELECT * FROM conflict_log ORDER BY logged_at DESC LIMIT ?").all(limit || 50);
+}
+
+module.exports = {
+  init, load, save, pendingCount, getMeta, setMeta, TABLES,
+  unsyncedRows, markSynced, applyRemote, conflicts
+};

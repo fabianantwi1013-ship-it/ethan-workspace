@@ -4,6 +4,7 @@
 const { app, BrowserWindow, Menu, ipcMain } = require("electron");
 const path = require("path");
 const storage = require("./storage");
+const sync = require("./sync");
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -36,6 +37,15 @@ app.whenReady().then(() => {
     try { storage.save(blob); } catch (err) { console.error("save failed:", err); }
   });
   ipcMain.handle("storage:pending", () => storage.pendingCount());
+
+  // --- sync engine ---
+  sync.init(app.getPath("userData"), (st) => {
+    for (const w of BrowserWindow.getAllWindows()) w.webContents.send("sync:status", st);
+  });
+  ipcMain.handle("sync:status", () => sync.getStatus());
+  ipcMain.handle("sync:configure", (e, cfg) => sync.configure(cfg));
+  ipcMain.handle("sync:now", async () => { await sync.kick(); return sync.getStatus(); });
+  ipcMain.handle("sync:conflicts", () => storage.conflicts(50));
 
   createWindow();
   app.on("activate", () => {
