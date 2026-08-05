@@ -18,7 +18,7 @@
 const path = require("path");
 const crypto = require("crypto");
 
-const TABLES = ["clients", "sales", "issues"];
+const TABLES = ["clients", "sales", "issues", "employees", "payroll"];
 const COUNTERS = ["nextNo", "nextInv", "nextReceipt"];
 let db;
 

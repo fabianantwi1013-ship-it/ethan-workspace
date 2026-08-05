@@ -27,7 +27,10 @@ let onStatusChange = null;
 function init(userDataDir, statusCallback) {
   cfgFile = path.join(userDataDir, "sync-config.json");
   onStatusChange = statusCallback || null;
-  try { config = JSON.parse(fs.readFileSync(cfgFile, "utf8")); } catch (e) { config = null; }
+  // strip a UTF-8 BOM if the file was hand-edited or written by a tool that adds one
+  try {
+    config = JSON.parse(fs.readFileSync(cfgFile, "utf8").replace(/^﻿/, ""));
+  } catch (e) { config = null; }
   // Ship the project endpoint so the owner only ever types the sync secret.
   // (The publishable key is designed to be embedded in client apps; the secret
   // that actually unlocks the data is entered by the owner and stays on device.)

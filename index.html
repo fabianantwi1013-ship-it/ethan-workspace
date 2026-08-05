@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/css/dashboard.css?v=18">
+<link rel="stylesheet" href="assets/css/dashboard.css?v=20">
 </head>
 <body class="locked">
 <style>
@@ -67,6 +67,9 @@
       <button data-view="account"><span class="ic">💼</span> Account</button>
       <button data-view="payment"><span class="ic">💵</span> Payment</button>
       <button data-view="issues"><span class="ic">♻️</span> Returns &amp; Spoilage</button>
+      <span class="nav-group">Staff</span>
+      <button data-view="employees"><span class="ic">👷</span> Employees</button>
+      <button data-view="payroll"><span class="ic">💸</span> Payroll</button>
       <button data-view="report"><span class="ic">📈</span> Report</button>
     </nav>
     <a class="back" href="#" id="lock-btn" style="margin-top:.4rem">🔒 Lock workspace</a>
@@ -291,6 +294,101 @@
       </div>
     </section>
 
+    <!-- ================= EMPLOYEES ================= -->
+    <section class="view" id="view-employees">
+      <div class="panel">
+        <div class="toolbar">
+          <input type="search" id="emp-search" placeholder="Search name, role or phone…">
+          <button class="btn btn-ginger" id="emp-toggle" type="button">+ Add employee</button>
+        </div>
+        <form id="emp-form" class="wform" hidden style="border:1px dashed var(--line);border-radius:12px;padding:1rem;margin-bottom:1rem">
+          <input type="hidden" id="emp-id">
+          <div><label>Full name *</label><input id="emp-name" required></div>
+          <div><label>Role</label><input id="emp-role" placeholder="e.g. Production, Driver, Sales"></div>
+          <div><label>Phone</label><input id="emp-phone"></div>
+          <div><label>Email</label><input id="emp-email" type="email"></div>
+          <div><label>Pay type</label>
+            <select id="emp-paytype">
+              <option value="hourly">Hourly</option>
+              <option value="monthly">Monthly salary</option>
+              <option value="daily">Daily rate</option>
+              <option value="perdelivery">Per delivery</option>
+              <option value="commission">Commission only</option>
+            </select>
+          </div>
+          <div><label>Rate ($)</label><input id="emp-rate" type="number" min="0" step="0.01" value="0"></div>
+          <div><label>Start date</label><input id="emp-start" type="date"></div>
+          <div><label>Status</label>
+            <select id="emp-active"><option value="1">Active</option><option value="0">Inactive</option></select>
+          </div>
+          <div class="full"><label>Notes</label><input id="emp-notes" placeholder="Bank details, agreed terms…"></div>
+          <div class="full">
+            <button class="btn btn-ginger" type="submit">Save employee</button>
+            <button class="btn btn-line" type="button" id="emp-cancel">Cancel</button>
+          </div>
+        </form>
+        <div class="tbl-scroll">
+          <table class="tbl">
+            <thead><tr><th>Employee</th><th>Role</th><th>Phone</th><th>Pay</th><th>Started</th><th class="num">Payments</th><th class="num">Paid to date</th><th>Status</th><th></th></tr></thead>
+            <tbody id="emp-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= PAYROLL ================= -->
+    <section class="view" id="view-payroll">
+      <div class="grid kpis">
+        <div class="panel kpi"><div class="label">Paid This Month</div><div class="value" id="pr-month">—</div></div>
+        <div class="panel kpi"><div class="label">Paid This Year</div><div class="value" id="pr-year">—</div></div>
+        <div class="panel kpi"><div class="label">Active Staff</div><div class="value" id="pr-staff">—</div></div>
+        <div class="panel kpi"><div class="label">Avg. Monthly Wage Bill</div><div class="value" id="pr-avg">—</div></div>
+      </div>
+
+      <div class="grid two-col mt" style="align-items:start">
+        <div class="panel">
+          <h3>Record a Payment</h3>
+          <form id="pr-form" class="wform">
+            <div class="full"><label>Employee *</label><select id="pr-emp" required></select></div>
+            <div><label>Period from</label><input id="pr-from" type="date"></div>
+            <div><label>Period to</label><input id="pr-to" type="date"></div>
+            <div><label id="pr-units-label">Hours worked</label><input id="pr-units" type="number" min="0" step="0.5" value="0"></div>
+            <div><label>Rate ($)</label><input id="pr-rate" type="number" min="0" step="0.01" value="0"></div>
+            <div><label>Bonus ($)</label><input id="pr-bonus" type="number" min="0" step="0.01" value="0"></div>
+            <div><label>Deductions ($)</label><input id="pr-deduct" type="number" min="0" step="0.01" value="0"></div>
+            <div><label>Payment date</label><input id="pr-date" type="date"></div>
+            <div><label>Method</label>
+              <select id="pr-method"><option>Cash</option><option>Bank Transfer</option><option>Mobile Money</option><option>Check</option></select>
+            </div>
+            <div class="full"><label>Notes</label><input id="pr-notes" placeholder="Reference, agreed extras…"></div>
+            <div class="full sale-summary" style="margin-top:0">
+              <div><span>Gross pay</span><b id="pr-gross">$0.00</b></div>
+              <div><span>Deductions</span><b id="pr-ded">$0.00</b></div>
+              <div class="total"><span>Net pay</span><b id="pr-net">$0.00</b></div>
+            </div>
+            <div class="full"><button class="btn btn-ginger" type="submit" style="width:100%">Save payment</button></div>
+          </form>
+        </div>
+        <div class="panel">
+          <h3>Payment History <span class="hint">newest first</span></h3>
+          <div class="tbl-scroll">
+            <table class="tbl">
+              <thead><tr><th>Date</th><th>Employee</th><th>Period</th><th>Method</th><th class="num">Net</th><th></th></tr></thead>
+              <tbody id="pr-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="payslip-wrap" hidden>
+        <div class="toolbar no-print" style="justify-content:center;margin-top:1.2rem">
+          <button class="btn btn-ginger" id="pr-print">🖨 Print payslip</button>
+          <button class="btn btn-line" id="pr-close">Close</button>
+        </div>
+        <div id="payslip-sheet"></div>
+      </div>
+    </section>
+
     <!-- ================= REPORT ================= -->
     <section class="view" id="view-report">
       <div class="toolbar no-print">
@@ -325,6 +423,12 @@
       <div class="panel mt">
         <h3>Returns &amp; Spoilage <span class="hint">losses in this period</span></h3>
         <div class="stat-grid" id="rep-loss"></div>
+      </div>
+
+      <div class="panel mt">
+        <h3>Staff Costs <span class="hint">wages paid in this period</span></h3>
+        <div class="stat-grid" id="rep-wages"></div>
+        <div class="hbars" id="rep-wage-people" style="margin-top:1rem"></div>
       </div>
 
       <div class="panel mt">
@@ -386,7 +490,7 @@
 })();
 </script>
 <script src="assets/js/ui-dialog.js?v=1"></script>
-<script src="assets/js/workspace.js?v=19"></script>
+<script src="assets/js/workspace.js?v=20"></script>
 <script src="assets/js/desktop-sync.js?v=3"></script>
 <script src="assets/js/desktop-hardware.js?v=2"></script>
 </body>

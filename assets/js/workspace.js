@@ -107,7 +107,9 @@
     if (!s.docType) s.docType = s.no.indexOf("R-") === 0 ? "receipt" : "proforma";
   });
   if (!db.nextInv) db.nextInv = 2000;
-  if (!db.issues) db.issues = [];   // returns & spoilage ledger
+  if (!db.issues) db.issues = [];       // returns & spoilage ledger
+  if (!db.employees) db.employees = []; // staff records
+  if (!db.payroll) db.payroll = [];     // wage payments
   save();
 
   /* ================= helpers ================= */
@@ -1165,6 +1167,277 @@
     renderEverything();
   });
 
+  /* ================= EMPLOYEES ================= */
+  var PAY_TYPES = {
+    hourly: { label: "Hourly", unit: "Hours worked", suffix: "/hr" },
+    monthly: { label: "Monthly salary", unit: "Months", suffix: "/month" },
+    daily: { label: "Daily rate", unit: "Days worked", suffix: "/day" },
+    perdelivery: { label: "Per delivery", unit: "Deliveries", suffix: "/delivery" },
+    commission: { label: "Commission", unit: "Commission units", suffix: "" }
+  };
+
+  function employees() { return db.employees || (db.employees = []); }
+  function payroll() { return db.payroll || (db.payroll = []); }
+  function employeeOf(p) {
+    return employees().filter(function (e) { return e.id === p.employeeId; })[0] ||
+           { name: "(removed employee)", role: "", payType: "hourly", rate: 0 };
+  }
+  function netOf(p) {
+    return Math.round(((p.gross || 0) - (p.deductions || 0)) * 100) / 100;
+  }
+  function paidTo(empId) {
+    return payroll().filter(function (p) { return p.employeeId === empId; })
+      .reduce(function (a, p) { return a + netOf(p); }, 0);
+  }
+
+  function renderEmployees() {
+    var body = $("#emp-body");
+    if (!body) return;
+    var q = ($("#emp-search").value || "").toLowerCase();
+    body.innerHTML = employees().filter(function (e) {
+      return !q || (e.name + " " + (e.role || "") + " " + (e.phone || "")).toLowerCase().indexOf(q) >= 0;
+    }).map(function (e) {
+      var t = PAY_TYPES[e.payType] || PAY_TYPES.hourly;
+      var n = payroll().filter(function (p) { return p.employeeId === e.id; }).length;
+      return "<tr><td><b>" + esc(e.name) + "</b>" +
+        (e.email ? "<br><small class='muted'>" + esc(e.email) + "</small>" : "") + "</td>" +
+        "<td>" + esc(e.role || "—") + "</td><td>" + esc(e.phone || "—") + "</td>" +
+        "<td>" + fmt$(e.rate || 0) + "<small class='muted'>" + t.suffix + "</small></td>" +
+        "<td>" + (e.startDate || "—") + "</td>" +
+        '<td class="num">' + n + '</td><td class="num"><b>' + fmt$(paidTo(e.id)) + "</b></td>" +
+        "<td>" + (e.active ? '<span class="badge ok">Active</span>' : '<span class="badge neutral">Inactive</span>') + "</td>" +
+        '<td><button class="btn btn-line" data-emp-edit="' + e.id + '" style="padding:.3rem .6rem;font-size:.75rem">Edit</button></td></tr>';
+    }).join("") ||
+      "<tr><td colspan='9' style='text-align:center;color:var(--muted);padding:1.6rem'>No employees yet — add your first one above.</td></tr>";
+  }
+
+  var empForm = $("#emp-form");
+  if (empForm) {
+    function showEmpForm(emp) {
+      empForm.hidden = false;
+      $("#emp-id").value = emp ? emp.id : "";
+      $("#emp-name").value = emp ? emp.name : "";
+      $("#emp-role").value = emp ? (emp.role || "") : "";
+      $("#emp-phone").value = emp ? (emp.phone || "") : "";
+      $("#emp-email").value = emp ? (emp.email || "") : "";
+      $("#emp-paytype").value = emp ? (emp.payType || "hourly") : "hourly";
+      $("#emp-rate").value = emp ? (emp.rate || 0) : 0;
+      $("#emp-start").value = emp ? (emp.startDate || "") : todayISO();
+      $("#emp-active").value = emp ? (emp.active ? "1" : "0") : "1";
+      $("#emp-notes").value = emp ? (emp.notes || "") : "";
+      $("#emp-name").focus();
+    }
+    $("#emp-toggle").addEventListener("click", function () {
+      if (empForm.hidden) showEmpForm(null); else empForm.hidden = true;
+    });
+    $("#emp-cancel").addEventListener("click", function () { empForm.hidden = true; });
+    $("#emp-search").addEventListener("input", renderEmployees);
+
+    document.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-emp-edit]");
+      if (!b) return;
+      var emp = employees().filter(function (x) { return x.id === parseInt(b.getAttribute("data-emp-edit"), 10); })[0];
+      if (emp) showEmpForm(emp);
+    });
+
+    empForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var id = parseInt($("#emp-id").value, 10);
+      var rec = {
+        name: $("#emp-name").value.trim(),
+        role: $("#emp-role").value.trim(),
+        phone: $("#emp-phone").value.trim(),
+        email: $("#emp-email").value.trim(),
+        payType: $("#emp-paytype").value,
+        rate: parseFloat($("#emp-rate").value) || 0,
+        startDate: $("#emp-start").value,
+        active: $("#emp-active").value === "1",
+        notes: $("#emp-notes").value.trim()
+      };
+      if (!rec.name) return;
+      if (id) {
+        var existing = employees().filter(function (x) { return x.id === id; })[0];
+        if (existing) Object.assign(existing, rec);
+      } else {
+        rec.id = employees().reduce(function (m, x) { return Math.max(m, x.id); }, 0) + 1;
+        employees().push(rec);
+      }
+      save();
+      empForm.hidden = true;
+      renderEverything();
+    });
+  }
+
+  /* ================= PAYROLL ================= */
+  function renderPayrollEmp() {
+    var sel = $("#pr-emp");
+    if (!sel) return;
+    var cur = sel.value;
+    sel.innerHTML = employees().filter(function (e) { return e.active; })
+      .map(function (e) {
+        var t = PAY_TYPES[e.payType] || PAY_TYPES.hourly;
+        return '<option value="' + e.id + '">' + esc(e.name) +
+          (e.role ? " — " + esc(e.role) : "") + " (" + fmt$(e.rate || 0) + t.suffix + ")</option>";
+      }).join("") || "<option value=''>Add an employee first</option>";
+    if (cur && $$("option", sel).some(function (o) { return o.value === cur; })) sel.value = cur;
+    syncPayFields();
+  }
+
+  function syncPayFields() {
+    var sel = $("#pr-emp");
+    if (!sel || !sel.value) return;
+    var emp = employees().filter(function (e) { return e.id === parseInt(sel.value, 10); })[0];
+    if (!emp) return;
+    var t = PAY_TYPES[emp.payType] || PAY_TYPES.hourly;
+    $("#pr-units-label").textContent = t.unit;
+    if (!$("#pr-rate").value || parseFloat($("#pr-rate").value) === 0) $("#pr-rate").value = emp.rate || 0;
+    if (emp.payType === "monthly" && !parseFloat($("#pr-units").value)) $("#pr-units").value = 1;
+    calcPay();
+  }
+
+  function calcPay() {
+    var units = parseFloat($("#pr-units").value) || 0;
+    var rate = parseFloat($("#pr-rate").value) || 0;
+    var bonus = parseFloat($("#pr-bonus").value) || 0;
+    var ded = parseFloat($("#pr-deduct").value) || 0;
+    var gross = Math.round((units * rate + bonus) * 100) / 100;
+    $("#pr-gross").textContent = fmt$(gross);
+    $("#pr-ded").textContent = fmt$(ded);
+    $("#pr-net").textContent = fmt$(Math.max(0, gross - ded));
+    return { units: units, rate: rate, bonus: bonus, deductions: ded, gross: gross };
+  }
+
+  function renderPayroll() {
+    if (!$("#pr-body")) return;
+    var now = new Date();
+    var thisMonth = now.toISOString().slice(0, 7);
+    var thisYear = String(now.getFullYear());
+    var all = payroll();
+    var monthTotal = all.filter(function (p) { return (p.date || "").slice(0, 7) === thisMonth; })
+      .reduce(function (a, p) { return a + netOf(p); }, 0);
+    var yearTotal = all.filter(function (p) { return (p.date || "").slice(0, 4) === thisYear; })
+      .reduce(function (a, p) { return a + netOf(p); }, 0);
+    var months = {};
+    all.forEach(function (p) {
+      var k = (p.date || "").slice(0, 7);
+      if (k) months[k] = (months[k] || 0) + netOf(p);
+    });
+    var mKeys = Object.keys(months);
+    $("#pr-month").textContent = fmt$(monthTotal);
+    $("#pr-year").textContent = fmt$(yearTotal);
+    $("#pr-staff").textContent = employees().filter(function (e) { return e.active; }).length;
+    $("#pr-avg").textContent = mKeys.length
+      ? fmt$(mKeys.reduce(function (a, k) { return a + months[k]; }, 0) / mKeys.length) : fmt$(0);
+
+    $("#pr-body").innerHTML = all.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; })
+      .map(function (p) {
+        var e = employeeOf(p);
+        return "<tr><td>" + (p.date || "—") + "</td><td><b>" + esc(e.name) + "</b></td>" +
+          "<td style='font-size:.78rem'>" + (p.periodFrom || "—") + "<br>→ " + (p.periodTo || "—") + "</td>" +
+          "<td>" + esc(p.method || "—") + "</td>" +
+          '<td class="num"><b>' + fmt$(netOf(p)) + "</b></td>" +
+          '<td><button class="btn btn-line" data-slip="' + p.id + '" style="padding:.3rem .6rem;font-size:.75rem">Payslip</button>' +
+          '<button class="rm" data-pay-del="' + p.id + '" title="Delete">×</button></td></tr>';
+      }).join("") ||
+      "<tr><td colspan='6' style='text-align:center;color:var(--muted);padding:1.6rem'>No payments recorded yet.</td></tr>";
+  }
+
+  function renderPayslip(p) {
+    var e = employeeOf(p);
+    var t = PAY_TYPES[e.payType] || PAY_TYPES.hourly;
+    $("#payslip-sheet").innerHTML =
+      '<div class="inv-sheet">' +
+      '<div class="inv-top">' +
+      '<img src="assets/img/brand/ethan-foods-logo.png" alt="Ethan Foods">' +
+      '<div class="inv-co"><b>' + COMPANY.name + "</b><br>" + COMPANY.phone + "<br>" + COMPANY.email + "</div>" +
+      "</div>" +
+      '<div class="inv-title">PAYSLIP</div>' +
+      '<div class="inv-meta">' +
+      "<span>Payslip No.<b>PS-" + p.id + "</b></span>" +
+      "<span>Payment date<b>" + (p.date || "—") + "</b></span>" +
+      "<span>Period<b>" + (p.periodFrom || "—") + " → " + (p.periodTo || "—") + "</b></span>" +
+      "<span>Method<b>" + esc(p.method || "—") + "</b></span>" +
+      "</div>" +
+      '<div class="inv-billto"><h4>Employee</h4><b>' + esc(e.name) + "</b>" +
+      (e.role ? " — " + esc(e.role) : "") +
+      (e.phone ? "<br>" + esc(e.phone) : "") + "</div>" +
+      '<table class="inv-table"><thead><tr><th>Description</th><th class="num">Units</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead><tbody>' +
+      "<tr><td>" + t.label + " pay</td>" +
+      '<td class="num">' + (p.units || 0) + '</td><td class="num">' + fmt$(p.rate || 0) + "</td>" +
+      '<td class="num">' + fmt$((p.units || 0) * (p.rate || 0)) + "</td></tr>" +
+      (p.bonus ? '<tr><td>Bonus</td><td class="num"></td><td class="num"></td><td class="num">' + fmt$(p.bonus) + "</td></tr>" : "") +
+      "</tbody></table>" +
+      '<div class="inv-totals">' +
+      "<div><span>Gross pay</span><span>" + fmt$(p.gross || 0) + "</span></div>" +
+      (p.deductions ? "<div><span>Deductions</span><span>−" + fmt$(p.deductions) + "</span></div>" : "") +
+      '<div class="grand"><span>Net pay</span><span>' + fmt$(netOf(p)) + "</span></div>" +
+      "</div>" +
+      (p.notes ? '<div class="inv-notes"><b>Notes:</b> ' + esc(p.notes) + "</div>" : "") +
+      '<div class="inv-terms"><div>This payslip confirms payment of the amount shown.<br>Please keep it for your records.</div>' +
+      '<div class="inv-sign">Employee signature</div></div>' +
+      '<div class="inv-foot">' + COMPANY.name + " · " + COMPANY.phone + " · " + COMPANY.email + "</div>" +
+      "</div>";
+    $("#payslip-wrap").hidden = false;
+    $("#payslip-wrap").scrollIntoView({ behavior: "smooth" });
+  }
+
+  var prForm = $("#pr-form");
+  if (prForm) {
+    $("#pr-date").value = todayISO();
+    $("#pr-emp").addEventListener("change", syncPayFields);
+    ["#pr-units", "#pr-rate", "#pr-bonus", "#pr-deduct"].forEach(function (s) {
+      $(s).addEventListener("input", calcPay);
+    });
+    $("#pr-close").addEventListener("click", function () { $("#payslip-wrap").hidden = true; });
+    $("#pr-print").addEventListener("click", function () { window.print(); });
+
+    prForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var empId = parseInt($("#pr-emp").value, 10);
+      if (!empId) { alert("Add an employee first."); return; }
+      var c = calcPay();
+      if (c.gross <= 0) { alert("Enter the hours/units and rate — the pay works out as zero."); return; }
+      var rec = {
+        id: payroll().reduce(function (m, x) { return Math.max(m, x.id || 0); }, 0) + 1,
+        employeeId: empId,
+        date: $("#pr-date").value || todayISO(),
+        periodFrom: $("#pr-from").value,
+        periodTo: $("#pr-to").value,
+        units: c.units, rate: c.rate, bonus: c.bonus,
+        gross: c.gross, deductions: c.deductions,
+        method: $("#pr-method").value,
+        notes: $("#pr-notes").value.trim()
+      };
+      payroll().push(rec);
+      save();
+      $("#pr-units").value = "0"; $("#pr-bonus").value = "0"; $("#pr-deduct").value = "0";
+      $("#pr-notes").value = "";
+      renderEverything();
+      renderPayslip(rec);
+    });
+
+    document.addEventListener("click", function (e) {
+      var slip = e.target.closest("[data-slip]");
+      if (slip) {
+        var p = payroll().filter(function (x) { return x.id === parseInt(slip.getAttribute("data-slip"), 10); })[0];
+        if (p) renderPayslip(p);
+        return;
+      }
+      var del = e.target.closest("[data-pay-del]");
+      if (del) {
+        efConfirm({ title: "Delete this payment?", message: "The payslip record will be removed.", okText: "Delete" })
+          .then(function (yes) {
+            if (!yes) return;
+            var id = parseInt(del.getAttribute("data-pay-del"), 10);
+            db.payroll = payroll().filter(function (x) { return x.id !== id; });
+            save();
+            $("#payslip-wrap").hidden = true;
+            renderEverything();
+          });
+      }
+    });
+  }
+
   /* ================= REPORT ================= */
   function reportSales() {
     var range = $("#report-range").value;
@@ -1265,6 +1538,33 @@
         lossCard("Spoilage value", fmt$(spl.reduce(function (a, x) { return a + x.qty * x.unitValue; }, 0)));
     }
 
+    // staff wage costs for the same period, and what they represent vs revenue
+    if ($("#rep-wages")) {
+      var rngW = $("#report-range").value;
+      var cutW = rngW === "all" ? 0 : Date.now() - parseInt(rngW, 10) * 86400000;
+      var pays = payroll().filter(function (p) { return new Date(p.date).getTime() >= cutW; });
+      var wageTotal = pays.reduce(function (a, p) { return a + netOf(p); }, 0);
+      var card = function (l, v) { return "<div><span class='muted'>" + l + "</span><b>" + v + "</b></div>"; };
+      $("#rep-wages").innerHTML =
+        card("Wages paid", fmt$(wageTotal)) +
+        card("Payments made", pays.length) +
+        card("Staff paid", Object.keys(pays.reduce(function (m, p) { m[p.employeeId] = 1; return m; }, {})).length) +
+        card("Wages vs revenue", revenue ? Math.round(wageTotal / revenue * 100) + "%" : "—");
+
+      var byEmp = {};
+      pays.forEach(function (p) {
+        var n = employeeOf(p).name;
+        byEmp[n] = (byEmp[n] || 0) + netOf(p);
+      });
+      var empKeys = Object.keys(byEmp).sort(function (a, b) { return byEmp[b] - byEmp[a]; });
+      var maxW = empKeys.length ? byEmp[empKeys[0]] : 1;
+      $("#rep-wage-people").innerHTML = empKeys.map(function (k) {
+        return '<div class="hbar"><span style="width:74px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+          esc(k) + '</span><div class="track"><i style="width:' + (byEmp[k] / maxW * 100) +
+          '%"></i></div><span class="num">' + fmt$(byEmp[k]) + "</span></div>";
+      }).join("") || '<p class="muted">No wages paid in this period.</p>';
+    }
+
     // products sold, broken down by month (last 6 months)
     var monthCols = [];
     for (var mc = 5; mc >= 0; mc--) {
@@ -1313,6 +1613,9 @@
 
   /* ================= boot ================= */
   function renderEverything() {
+    renderEmployees();
+    renderPayrollEmp();
+    renderPayroll();
     renderWebOrders();
     renderRegCust();
     renderEod();
