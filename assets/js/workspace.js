@@ -413,26 +413,43 @@
       var id = parseInt($("#inv-select").value, 10);
       var s = db.sales.filter(function (x) { return x.id === id; })[0];
       if (!s) { alert("Choose a proforma invoice first."); return; }
-      if (!confirm("Convert " + s.no + " into a final sales invoice?\n\nIt will be issued as PAID — the remaining balance is recorded as received.")) return;
-      s.docType = "invoice";
-      s.invNo = "INV-" + (++db.nextInv);
       var bal = balanceOf(s);
-      if (bal > 0.005) {
-        var method = prompt("How was the " + fmt$(bal) + " paid? (Cash, Card, Mobile Money, Bank Transfer, Check)", "Cash");
-        s.payments = s.payments || [];
-        s.payments.push({
-          date: todayISO(),
-          amount: Math.round(bal * 100) / 100,
-          method: (method || "Cash").trim() || "Cash",
-          ref: "Paid on issue"
-        });
-      }
-      save();
-      renderEverything();
-      $("#sinv-select").value = s.id;
-      renderSInvoice();
-      $$(".side nav button[data-view=sinvoice]")[0].click();
+      askPaymentMethod("Convert " + s.no + " to a sales invoice",
+        bal > 0.005
+          ? "It will be issued as PAID — " + fmt$(bal) + " recorded as received.\n\nHow was it paid?"
+          : "It is already fully paid.",
+        bal > 0.005
+      ).then(function (method) {
+        if (method === null) return;
+        s.docType = "invoice";
+        s.invNo = "INV-" + (++db.nextInv);
+        if (bal > 0.005) {
+          s.payments = s.payments || [];
+          s.payments.push({
+            date: todayISO(),
+            amount: Math.round(bal * 100) / 100,
+            method: method,
+            ref: "Paid on issue"
+          });
+        }
+        save();
+        renderEverything();
+        $("#sinv-select").value = s.id;
+        renderSInvoice();
+        $$(".side nav button[data-view=sinvoice]")[0].click();
+      });
     });
+  }
+
+  /* Payment-method picker. Uses the in-app dialog because Electron has no
+     window.prompt(); resolves to the method name, or null if cancelled. */
+  var PAY_METHODS = ["Cash", "Card", "Mobile Money", "Bank Transfer", "Check"];
+  function askPaymentMethod(title, message, needMethod) {
+    if (!needMethod) {
+      return efConfirm({ title: title, message: message, okText: "Convert" })
+        .then(function (yes) { return yes ? "Cash" : null; });
+    }
+    return efChoose({ title: title, message: message, options: PAY_METHODS });
   }
 
   var sinvSel = $("#sinv-select");
@@ -450,19 +467,23 @@
       if (!s) { alert("Choose a sales invoice first."); return; }
       var bal = balanceOf(s);
       if (bal <= 0.005) { alert(displayNo(s) + " is already fully paid."); return; }
-      var method = prompt("Mark " + displayNo(s) + " as PAID — " + fmt$(bal) + " received.\n\n" +
-        "How was it paid? (Cash, Card, Mobile Money, Bank Transfer, Check)", "Cash");
-      if (method === null) return;
-      s.payments = s.payments || [];
-      s.payments.push({
-        date: todayISO(),
-        amount: Math.round(bal * 100) / 100,
-        method: (method.trim() || "Cash"),
-        ref: "Marked paid in full"
+      efChoose({
+        title: "Mark " + displayNo(s) + " as paid",
+        message: fmt$(bal) + " received. How was it paid?",
+        options: PAY_METHODS
+      }).then(function (method) {
+        if (method === null) return;
+        s.payments = s.payments || [];
+        s.payments.push({
+          date: todayISO(),
+          amount: Math.round(bal * 100) / 100,
+          method: method,
+          ref: "Marked paid in full"
+        });
+        save();
+        renderEverything();
+        renderSInvoice();
       });
-      save();
-      renderEverything();
-      renderSInvoice();
     });
   }
 

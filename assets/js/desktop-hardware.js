@@ -103,54 +103,69 @@
 
   function settings() {
     HW.config().then(function (c) {
-      HW.printers().then(function (list) {
-        var menu = "Receipt printer setup\n\n" +
-          "Current: " + (c.mode === "none" ? "not configured" :
-            c.mode === "windows" ? "USB printer — " + (c.printerName || "?") :
-            "network printer — " + c.host + ":" + c.port) +
-          "\nCash drawer: " + (c.drawer ? "enabled" : "disabled") +
-          "\n\nChoose:\n" +
-          "1 = USB printer (installed in Windows)\n" +
-          "2 = Network printer (IP address)\n" +
-          "3 = Turn printing off\n" +
-          "4 = Toggle cash drawer\n" +
-          "5 = Print a test receipt";
-        var pick = prompt(menu, "1");
-        if (pick === null) return;
-        pick = pick.trim();
-
-        if (pick === "1") {
-          if (!list.length) { alert("No printers found. Install the printer's Windows driver first."); return; }
-          var numbered = list.map(function (p, i) { return (i + 1) + ") " + p; }).join("\n");
-          var n = prompt("Which printer?\n\n" + numbered, "1");
-          if (n === null) return;
-          var chosen = list[parseInt(n, 10) - 1];
-          if (!chosen) { alert("That number wasn't in the list."); return; }
-          HW.setConfig({ mode: "windows", printerName: chosen })
-            .then(function () { alert("Saved: " + chosen + "\n\nRun option 5 to test it."); });
-
-        } else if (pick === "2") {
-          var host = prompt("Printer IP address:", c.host || "192.168.1.100");
-          if (host === null) return;
-          var port = prompt("Port (usually 9100):", String(c.port || 9100));
-          if (port === null) return;
-          HW.setConfig({ mode: "network", host: host.trim(), port: port.trim() })
-            .then(function () { alert("Saved.\n\nRun option 5 to test it."); });
-
-        } else if (pick === "3") {
-          HW.setConfig({ mode: "none" }).then(function () { alert("Receipt printing turned off."); });
-
-        } else if (pick === "4") {
-          HW.setConfig({ drawer: !c.drawer })
-            .then(function (n2) { alert("Cash drawer " + (n2.drawer ? "enabled" : "disabled") + "."); });
-
-        } else if (pick === "5") {
-          HW.test().then(function (r) {
-            alert(r && r.ok === false ? "Test failed:\n\n" + r.error : "Test sent to the printer.");
+      var current = c.mode === "none" ? "No printer configured"
+        : c.mode === "windows" ? "USB printer — " + (c.printerName || "?")
+        : "Network printer — " + c.host + ":" + c.port;
+      efChoose({
+        title: "Hardware",
+        message: current + "\nCash drawer: " + (c.drawer ? "enabled" : "disabled"),
+        options: [
+          { value: "usb", label: "🔌 USB printer", hint: "Choose an installed Windows printer" },
+          { value: "net", label: "🌐 Network printer", hint: "Connect by IP address" },
+          { value: "drawer", label: (c.drawer ? "🚫 Disable" : "💰 Enable") + " cash drawer" },
+          { value: "test", label: "🧾 Print a test receipt" },
+          { value: "off", label: "⏹ Turn printing off" }
+        ]
+      }).then(function (pick) {
+        if (pick === "usb") return chooseUsb();
+        if (pick === "net") return chooseNetwork(c);
+        if (pick === "drawer") {
+          return HW.setConfig({ drawer: !c.drawer }).then(function (n) {
+            alert("Cash drawer " + (n.drawer ? "enabled" : "disabled") + ".");
           });
+        }
+        if (pick === "test") {
+          return HW.test().then(function (r) {
+            alert(r && r.ok === false ? "Test failed:\n\n" + r.error : "Test receipt sent to the printer.");
+          });
+        }
+        if (pick === "off") {
+          return HW.setConfig({ mode: "none" }).then(function () { alert("Receipt printing turned off."); });
         }
       });
     });
+  }
+
+  function chooseUsb() {
+    HW.printers().then(function (list) {
+      if (!list.length) {
+        alert("No printers found.\n\nInstall the printer's Windows driver first, then try again.");
+        return;
+      }
+      efChoose({
+        title: "Which printer?",
+        message: "Pick the thermal receipt printer.",
+        options: list
+      }).then(function (chosen) {
+        if (!chosen) return;
+        HW.setConfig({ mode: "windows", printerName: chosen }).then(function () {
+          alert("Saved: " + chosen + "\n\nUse “Print a test receipt” to check it.");
+        });
+      });
+    });
+  }
+
+  function chooseNetwork(c) {
+    efPrompt({ title: "Network printer", message: "Printer IP address", value: c.host || "192.168.1.100" })
+      .then(function (host) {
+        if (host === null || !host.trim()) return;
+        return efPrompt({ title: "Network printer", message: "Port (usually 9100)", value: String(c.port || 9100) })
+          .then(function (port) {
+            if (port === null) return;
+            return HW.setConfig({ mode: "network", host: host.trim(), port: port.trim() })
+              .then(function () { alert("Saved.\n\nUse “Print a test receipt” to check it."); });
+          });
+      });
   }
 
   /* ---------- barcode scanner (keyboard wedge) ----------
@@ -185,14 +200,17 @@
     if (!productName) {
       var sel = $(".it-name");
       if (!sel) return;
-      var options = $$("option", sel).map(function (o) { return o.textContent; });
-      var numbered = options.map(function (p, i) { return (i + 1) + ") " + p; }).join("\n");
-      var n = prompt("New barcode " + code + "\n\nWhich product is this?\n\n" + numbered, "1");
-      if (n === null) return;
-      productName = options[parseInt(n, 10) - 1];
-      if (!productName) return;
-      map[code] = productName;
-      try { localStorage.setItem("ef_barcodes", JSON.stringify(map)); } catch (err) {}
+      efChoose({
+        title: "Unrecognised barcode",
+        message: code + "\n\nWhich product is this? I'll remember it next time.",
+        options: $$("option", sel).map(function (o) { return o.textContent; })
+      }).then(function (chosen) {
+        if (!chosen) return;
+        map[code] = chosen;
+        try { localStorage.setItem("ef_barcodes", JSON.stringify(map)); } catch (err) {}
+        addLine(chosen);
+      });
+      return;
     }
     addLine(productName);
   }

@@ -49,43 +49,62 @@
   chip.addEventListener("click", function () {
     D.status().then(function (st) {
       if (!st.configured) return setup();
-      var msg = "Sync status\n\n" +
-        (st.online === false ? "⚠ Offline — will retry automatically\n" : "● Online\n") +
-        (st.pending ? st.pending + " record(s) waiting to upload\n" : "Everything is uploaded\n") +
-        (st.lastSync ? "Last sync: " + new Date(st.lastSync).toLocaleString() + "\n" : "") +
-        (st.error ? "Last error: " + st.error + "\n" : "") +
-        "\nOK = sync now, Cancel = change settings";
-      if (confirm(msg)) D.now().then(paint);
-      else setup();
+      efChoose({
+        title: "Cloud sync",
+        message:
+          (st.online === false ? "⚠ Offline — retrying automatically" : "● Online") + "\n" +
+          (st.pending ? st.pending + " record(s) waiting to upload" : "Everything is uploaded") +
+          (st.lastSync ? "\nLast sync: " + new Date(st.lastSync).toLocaleString() : "") +
+          (st.error ? "\nLast error: " + st.error : ""),
+        options: [
+          { value: "now", label: "🔄 Sync now" },
+          { value: "key", label: "🔑 Change sync key" },
+          { value: "adv", label: "⚙ Change server details", hint: "URL and publishable key" }
+        ]
+      }).then(function (pick) {
+        if (pick === "now") D.now().then(paint);
+        else if (pick === "key") setup();
+        else if (pick === "adv") advancedSetup();
+      });
     });
   });
 
   function setup() {
     // The cloud endpoint ships with the app; normally only the secret is needed.
-    var key = prompt(
-      "Enter the sync key — the secret word you put in the Supabase SQL policy.\n\n" +
-      "(Leave blank and press OK to re-enter the server details instead.)", "");
-    if (key === null) return;
-    if (key.trim() === "") return advancedSetup();
-    D.configure({ posKey: key }).then(function (ok) {
-      if (!ok) { alert("Those values look incomplete — sync not enabled."); return; }
-      D.now().then(function (st) {
-        paint(st);
-        alert(st.online === false
-          ? "Saved, but the first sync failed:\n\n" + (st.error || "unknown error")
-          : "Connected — cloud sync is on.");
+    efPrompt({
+      title: "Turn on cloud sync",
+      message: "Enter the sync key — the secret word set in the Supabase SQL policy.",
+      placeholder: "sync key",
+      password: true,
+      okText: "Connect"
+    }).then(function (key) {
+      if (key === null || !key.trim()) return;
+      D.configure({ posKey: key.trim() }).then(function (ok) {
+        if (!ok) { alert("That didn't look complete — sync not enabled."); return; }
+        D.now().then(function (st) {
+          paint(st);
+          alert(st.online === false
+            ? "Saved, but the first sync failed:\n\n" + (st.error || "unknown error")
+            : "Connected — cloud sync is on.");
+        });
       });
     });
   }
 
   function advancedSetup() {
-    var url = prompt("Supabase Project URL:", "");
-    if (url === null) return;
-    var anon = prompt("Supabase publishable/anon key:", "");
-    if (anon === null) return;
-    var key = prompt("Sync key:", "");
-    if (key === null) return;
-    D.configure({ url: url, anonKey: anon, posKey: key })
-      .then(function () { D.now().then(paint); });
+    efPrompt({ title: "Server details (1/3)", message: "Supabase Project URL" })
+      .then(function (url) {
+        if (url === null) return;
+        return efPrompt({ title: "Server details (2/3)", message: "Publishable / anon key" })
+          .then(function (anon) {
+            if (anon === null) return;
+            return efPrompt({ title: "Server details (3/3)", message: "Sync key", password: true })
+              .then(function (key) {
+                if (key === null) return;
+                return D.configure({ url: url, anonKey: anon, posKey: key })
+                  .then(function () { return D.now().then(paint); });
+              });
+          });
+      });
   }
 })();
