@@ -61,13 +61,13 @@
   });
 
   function setup() {
-    var url = prompt("Supabase Project URL (https://xxxx.supabase.co):", "");
-    if (url === null) return;
-    var anon = prompt("Supabase anon public key:", "");
-    if (anon === null) return;
-    var key = prompt("Your sync key (the one you put in the SQL policy):", "");
+    // The cloud endpoint ships with the app; normally only the secret is needed.
+    var key = prompt(
+      "Enter the sync key — the secret word you put in the Supabase SQL policy.\n\n" +
+      "(Leave blank and press OK to re-enter the server details instead.)", "");
     if (key === null) return;
-    D.configure({ url: url, anonKey: anon, posKey: key }).then(function (ok) {
+    if (key.trim() === "") return advancedSetup();
+    D.configure({ posKey: key }).then(function (ok) {
       if (!ok) { alert("Those values look incomplete — sync not enabled."); return; }
       D.now().then(function (st) {
         paint(st);
@@ -76,5 +76,16 @@
           : "Connected — cloud sync is on.");
       });
     });
+  }
+
+  function advancedSetup() {
+    var url = prompt("Supabase Project URL:", "");
+    if (url === null) return;
+    var anon = prompt("Supabase publishable/anon key:", "");
+    if (anon === null) return;
+    var key = prompt("Sync key:", "");
+    if (key === null) return;
+    D.configure({ url: url, anonKey: anon, posKey: key })
+      .then(function () { D.now().then(paint); });
   }
 })();

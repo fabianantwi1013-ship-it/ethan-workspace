@@ -7,12 +7,51 @@
   "author": "Ethan Foods",
   "license": "UNLICENSED",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder",
+    "release": "electron-builder --publish always"
   },
   "devDependencies": {
-    "electron": "^38.2.0"
+    "electron": "^38.2.0",
+    "electron-builder": "^26.15.3"
   },
   "dependencies": {
-    "better-sqlite3": "^12.11.1"
+    "better-sqlite3": "^12.11.1",
+    "electron-updater": "^6.8.9"
+  },
+  "build": {
+    "appId": "net.ethanfoods.pos",
+    "productName": "Ethan Foods POS",
+    "directories": { "output": "dist" },
+    "files": [
+      "main.js",
+      "preload.js",
+      "storage.js",
+      "sync.js",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      { "from": "../index.html", "to": "app-ui/index.html" },
+      { "from": "../assets", "to": "app-ui/assets" }
+    ],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build-icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Ethan Foods POS"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "fabianantwi1013-ship-it",
+        "repo": "ethan-workspace"
+      }
+    ]
   }
 }

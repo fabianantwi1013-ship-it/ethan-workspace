@@ -28,6 +28,16 @@ function init(userDataDir, statusCallback) {
   cfgFile = path.join(userDataDir, "sync-config.json");
   onStatusChange = statusCallback || null;
   try { config = JSON.parse(fs.readFileSync(cfgFile, "utf8")); } catch (e) { config = null; }
+  // Ship the project endpoint so the owner only ever types the sync secret.
+  // (The publishable key is designed to be embedded in client apps; the secret
+  // that actually unlocks the data is entered by the owner and stays on device.)
+  if (!config) {
+    config = {
+      url: "https://jqqiwrtnadqwsoquhyrp.supabase.co",
+      anonKey: "sb_publishable_hpQQqGoFJgtPWnDRsMbZ2A_FlARZUyM",
+      posKey: ""
+    };
+  }
   status.configured = isConfigured();
   refreshPending();
   timer = setInterval(() => { run("interval"); }, 30000);
@@ -38,11 +48,15 @@ function isConfigured() {
   return !!(config && config.url && config.anonKey && config.posKey);
 }
 
+/* Partial updates merge with what's already stored, so the setup dialog can ask
+   only for the missing piece (normally just the sync key). */
 function configure(newCfg) {
+  const prev = config || {};
+  const pick = (a, b) => (a === undefined || a === null || a === "") ? (b || "") : String(a).trim();
   config = {
-    url: String(newCfg.url || "").trim().replace(/\/+$/, ""),
-    anonKey: String(newCfg.anonKey || "").trim(),
-    posKey: String(newCfg.posKey || "").trim()
+    url: pick(newCfg.url, prev.url).replace(/\/+$/, ""),
+    anonKey: pick(newCfg.anonKey, prev.anonKey),
+    posKey: pick(newCfg.posKey, prev.posKey)
   };
   fs.writeFileSync(cfgFile, JSON.stringify(config, null, 2));
   status.configured = isConfigured();

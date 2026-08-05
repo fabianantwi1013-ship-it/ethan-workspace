@@ -5,6 +5,7 @@ const { app, BrowserWindow, Menu, ipcMain } = require("electron");
 const path = require("path");
 const storage = require("./storage");
 const sync = require("./sync");
+const { autoUpdater } = require("electron-updater");
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -23,7 +24,12 @@ function createWindow() {
   });
 
   Menu.setApplicationMenu(null);  // kiosk-clean: no File/Edit menu bar
-  win.loadFile(path.join(__dirname, "..", "index.html"));
+
+  // Dev: load the UI straight from the repo. Packaged: from extraResources,
+  // so the same source files serve the website, dev app and installed app.
+  win.loadFile(app.isPackaged
+    ? path.join(process.resourcesPath, "app-ui", "index.html")
+    : path.join(__dirname, "..", "index.html"));
 }
 
 app.whenReady().then(() => {
@@ -48,6 +54,23 @@ app.whenReady().then(() => {
   ipcMain.handle("sync:conflicts", () => storage.conflicts(50));
 
   createWindow();
+
+  // --- auto-update from GitHub Releases ---
+  // Downloads quietly in the background; installs when the app is next closed,
+  // so an update can never interrupt a sale in progress.
+  if (app.isPackaged) {
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.on("error", (e) => console.error("update error:", e.message));
+    autoUpdater.on("update-downloaded", (info) => {
+      for (const w of BrowserWindow.getAllWindows()) {
+        w.webContents.send("update:ready", { version: info.version });
+      }
+    });
+    autoUpdater.checkForUpdates().catch(() => {});
+    setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 6 * 60 * 60 * 1000);
+  }
+
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
