@@ -93,3 +93,9 @@ app.whenReady().then(() => {
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
+
+// flush and close the database so the file is always left consistent
+app.on("will-quit", () => {
+  try { sync.stop(); } catch (e) {}
+  try { storage.close(); } catch (e) {}
+});

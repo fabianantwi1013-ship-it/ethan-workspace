@@ -15,6 +15,7 @@
 
    save(blob) diffs incoming records against stored json: only rows that actually
    changed are rewritten and marked unsynced. */
+const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
@@ -22,11 +23,42 @@ const TABLES = ["clients", "sales", "issues", "employees", "payroll"];
 const COUNTERS = ["nextNo", "nextInv", "nextReceipt"];
 let db;
 
-function init(dirOverride) {
+/* Open the database, and if the file is damaged (power cut, killed process,
+   bad disk) quarantine it and start a clean one rather than refusing to launch.
+   A till that won't open is worse than one that has to re-pull its data: the
+   cloud copy is restored automatically on the next sync, and the damaged file
+   is kept alongside for salvage. */
+function openOrRecover(file) {
   const Database = require("better-sqlite3");
+  let handle = null;
+  try {
+    handle = new Database(file);
+    const result = handle.pragma("quick_check", { simple: true });
+    if (result !== "ok") throw new Error("quick_check returned: " + result);
+    return handle;
+  } catch (err) {
+    if (handle) { try { handle.close(); } catch (e) {} }
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    for (const suffix of ["", "-wal", "-shm"]) {
+      const from = file + suffix;
+      if (!fs.existsSync(from)) continue;
+      try { fs.renameSync(from, file + ".corrupt-" + stamp + suffix); }
+      catch (e) { try { fs.unlinkSync(from); } catch (e2) {} }
+    }
+    console.error("Database was damaged (" + err.message +
+                  ") — quarantined and rebuilt; cloud data will re-sync.");
+    recovered = true;
+    return new Database(file);
+  }
+}
+
+let recovered = false;
+function wasRecovered() { return recovered; }
+
+function init(dirOverride) {
   const dir = dirOverride || require("electron").app.getPath("userData");
   const file = path.join(dir, "ethan-pos.db");
-  db = new Database(file);
+  db = openOrRecover(file);
   db.pragma("journal_mode = WAL");
 
   for (const t of TABLES) {
@@ -54,6 +86,16 @@ function init(dirOverride) {
   )`);
   if (!getMeta("device_id")) setMeta("device_id", crypto.randomUUID());
   return file;
+}
+
+/* Clean shutdown: checkpoint the write-ahead log back into the main file and
+   release the handle. Without this, a kill mid-write can leave the pair
+   inconsistent — which is how databases get damaged. */
+function close() {
+  if (!db) return;
+  try { db.pragma("wal_checkpoint(TRUNCATE)"); } catch (e) {}
+  try { db.close(); } catch (e) {}
+  db = null;
 }
 
 function getMeta(key) {
@@ -221,5 +263,5 @@ function conflicts(limit) {
 
 module.exports = {
   init, load, save, pendingCount, getMeta, setMeta, TABLES,
-  unsyncedRows, markSynced, applyRemote, conflicts
+  unsyncedRows, markSynced, applyRemote, conflicts, wasRecovered, close
 };
