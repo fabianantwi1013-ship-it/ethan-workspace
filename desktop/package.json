@@ -24,10 +24,7 @@
     "productName": "Ethan Foods POS",
     "directories": { "output": "dist" },
     "files": [
-      "main.js",
-      "preload.js",
-      "storage.js",
-      "sync.js",
+      "*.js",
       "node_modules/**/*"
     ],
     "extraResources": [

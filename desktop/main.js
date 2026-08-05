@@ -6,6 +6,7 @@ const path = require("path");
 const storage = require("./storage");
 const sync = require("./sync");
 const { autoUpdater } = require("electron-updater");
+const hardware = require("./hardware");
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -52,6 +53,19 @@ app.whenReady().then(() => {
   ipcMain.handle("sync:configure", (e, cfg) => sync.configure(cfg));
   ipcMain.handle("sync:now", async () => { await sync.kick(); return sync.getStatus(); });
   ipcMain.handle("sync:conflicts", () => storage.conflicts(50));
+
+  // --- POS hardware (all optional) ---
+  hardware.init(app.getPath("userData"));
+  const wrap = (fn) => async (...args) => {
+    try { return await fn(...args); }
+    catch (err) { return { ok: false, error: String(err.message || err) }; }
+  };
+  ipcMain.handle("hw:config", () => hardware.getConfig());
+  ipcMain.handle("hw:setConfig", (e, c) => hardware.setConfig(c));
+  ipcMain.handle("hw:printers", () => hardware.listPrinters());
+  ipcMain.handle("hw:print", wrap((e, doc) => hardware.printReceipt(doc)));
+  ipcMain.handle("hw:drawer", wrap(() => hardware.openDrawer()));
+  ipcMain.handle("hw:test", wrap(() => hardware.testPrint()));
 
   createWindow();
 

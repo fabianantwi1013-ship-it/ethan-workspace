@@ -10,6 +10,14 @@ contextBridge.exposeInMainWorld("desktop", {
     save: (blob) => ipcRenderer.send("storage:save", blob),
     pending: () => ipcRenderer.invoke("storage:pending")
   },
+  hardware: {
+    config: () => ipcRenderer.invoke("hw:config"),
+    setConfig: (c) => ipcRenderer.invoke("hw:setConfig", c),
+    printers: () => ipcRenderer.invoke("hw:printers"),
+    print: (doc) => ipcRenderer.invoke("hw:print", doc),
+    drawer: () => ipcRenderer.invoke("hw:drawer"),
+    test: () => ipcRenderer.invoke("hw:test")
+  },
   sync: {
     status: () => ipcRenderer.invoke("sync:status"),
     configure: (cfg) => ipcRenderer.invoke("sync:configure", cfg),
