@@ -231,11 +231,29 @@
     });
   }
 
+  /* Keep the form honest about what it is about to produce: the button, the
+     hint and the date label all follow the chosen document type. */
   var docTypeSel = $("#s-doctype");
-  if (docTypeSel && $("#s-paymethod-wrap")) {
-    docTypeSel.addEventListener("change", function () {
-      $("#s-paymethod-wrap").hidden = docTypeSel.value !== "invoice";
-    });
+  if (docTypeSel) {
+    function paintDocType() {
+      var isFinal = docTypeSel.value === "invoice";
+      if ($("#s-paymethod-wrap")) $("#s-paymethod-wrap").hidden = !isFinal;
+      if ($("#s-submit")) {
+        $("#s-submit").textContent = isFinal
+          ? "Save & Generate Sales Invoice"
+          : "Save & Generate Proforma Invoice";
+      }
+      if ($("#s-hint")) {
+        $("#s-hint").textContent = isFinal
+          ? "Saves the client to the Client Database and opens the sales invoice, issued as PAID and ready to print."
+          : "Saves the client to the Client Database and opens the proforma invoice, ready to print.";
+      }
+      if ($("#s-valid-label")) {
+        $("#s-valid-label").textContent = isFinal ? "Payment due in (days)" : "Valid for (days)";
+      }
+    }
+    docTypeSel.addEventListener("change", paintDocType);
+    paintDocType();
   }
 
   if (itemsHost) {

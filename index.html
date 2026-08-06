@@ -128,7 +128,7 @@
               <div><label>Delivery fee ($)</label><input id="s-delivery" type="number" min="0" step="0.01" value="0"></div>
               <div><label>Discount ($)</label><input id="s-discount" type="number" min="0" step="0.01" value="0"></div>
               <div><label>Tax rate (%)</label><input id="s-tax" type="number" min="0" step="0.1" value="6.5"></div>
-              <div><label>Valid for (days)</label><input id="s-valid" type="number" min="1" value="14"></div>
+              <div><label id="s-valid-label">Valid for (days)</label><input id="s-valid" type="number" min="1" value="14"></div>
               <div class="full"><label>Notes</label><textarea id="s-notes" rows="3" placeholder="Delivery instructions, agreed terms…"></textarea></div>
             </div>
             <div class="sale-summary">
@@ -136,8 +136,8 @@
               <div><span>Tax</span><b id="sum-tax">$0.00</b></div>
               <div class="total"><span>Total</span><b id="sum-total">$0.00</b></div>
             </div>
-            <button class="btn btn-ginger" type="submit" style="width:100%;margin-top:1rem">Save &amp; Generate Proforma Invoice</button>
-            <p class="muted" style="margin-top:.6rem">Saves the client to the Client Database and opens the proforma invoice, ready to print.</p>
+            <button class="btn btn-ginger" type="submit" id="s-submit" style="width:100%;margin-top:1rem">Save &amp; Generate Proforma Invoice</button>
+            <p class="muted" style="margin-top:.6rem" id="s-hint">Saves the client to the Client Database and opens the proforma invoice, ready to print.</p>
           </div>
         </div>
       </form>
@@ -490,7 +490,7 @@
 })();
 </script>
 <script src="assets/js/ui-dialog.js?v=1"></script>
-<script src="assets/js/workspace.js?v=20"></script>
+<script src="assets/js/workspace.js?v=21"></script>
 <script src="assets/js/desktop-sync.js?v=3"></script>
 <script src="assets/js/desktop-hardware.js?v=2"></script>
 </body>
